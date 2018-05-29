@@ -1,0 +1,43 @@
+{% set setup_data = load_setup_py_data() %}
+
+package:
+  name: thetamod
+  version: {{ setup_data['version'] }}
+
+source:
+  git_url: ../
+  git_rev: {{ 'v' + setup_data['version'] }}  # always use tagged version
+
+build:
+  # If this is a new build for the same version, increment the build
+  # number. If you do not include this key, it defaults to 0.
+  number: {{ environ.get("PKG_BUILDNUM", 0) }}
+
+  # Specify additional env vars pass through
+  # script_env:
+  #   - ENV_VAR_HERE
+
+# Common dependencies that need to be listed in both the build and run
+# subsections of the requirements section.
+{% set deps = [] %}
+
+requirements:
+  build:
+    # We default to Python 3.6 if no environment variable is set
+    - python {{ python }}
+    - setuptools
+
+  run:
+    - python {{ python }}
+    # - vs2015_runtime  [win]
+
+test:
+  # Test that we can import the package
+  imports:
+    - thetamod
+
+about:
+  home: https://github.com/pennmem/thetamod
+  summary: {{ setup_data['description'] }}
+  # license: FIXME
+  # license_file: FIXME

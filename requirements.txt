@@ -1,0 +1,6 @@
+pytest
+pytest-cov
+codecov
+sphinx
+flake8
+
