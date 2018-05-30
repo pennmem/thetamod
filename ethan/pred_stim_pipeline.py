@@ -304,25 +304,25 @@ def get_elec_regions(tal_struct):
     
     for e in tal_struct['atlases']:
         try:
-            if 'stein' in e.keys():
+            if 'stein' in list(e.keys()):
                 if (e['stein']['region'] is not None) and (len(e['stein']['region'])>1):
                     regs.append(e['stein']['region'].lower())
                     continue
                 else:
                     pass
-            if 'das' in e.keys():
+            if 'das' in list(e.keys()):
                 if (e['das']['region'] is not None) and (len(e['das']['region'])>1):
                     regs.append(e['das']['region'].lower())
                     continue
                 else:
                     pass
-            if 'ind' in e.keys():
+            if 'ind' in list(e.keys()):
                 if (e['ind']['region'] is not None) and (len(e['ind']['region'])>1):
                     regs.append(e['ind']['region'].lower())
                     continue
                 else:
                     pass
-            if 'wb' in e.keys():
+            if 'wb' in list(e.keys()):
                 if (e['wb']['region'] is not None) and (len(e['wb']['region'])>1):
                     regs.append(e['wb']['region'].lower())
                     continue

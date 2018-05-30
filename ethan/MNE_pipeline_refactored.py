@@ -1,7 +1,7 @@
 #Import tools
 import mne
 import numpy as np
-import cPickle as pk
+import pickle as pk
 from os import mkdir
 from glob import glob
 from ptsa.data.readers import BaseEventReader
@@ -98,25 +98,25 @@ class mne_pipeline():
         regs = []
         for e in tal_struct['atlases']:
             try:
-                if 'stein' in e.keys():
+                if 'stein' in list(e.keys()):
                     if (e['stein']['region'] is not None) and (len(e['stein']['region'])>1):
                         regs.append(e['stein']['region'].lower())
                         continue
                     else:
                         pass
-                if 'das' in e.keys():
+                if 'das' in list(e.keys()):
                     if (e['das']['region'] is not None) and (len(e['das']['region'])>1):
                         regs.append(e['das']['region'].lower())
                         continue
                     else:
                         pass
-                if 'ind' in e.keys():
+                if 'ind' in list(e.keys()):
                     if (e['ind']['region'] is not None) and (len(e['ind']['region'])>1):
                         regs.append(e['ind']['region'].lower())
                         continue
                     else:
                         pass
-                if 'wb' in e.keys():
+                if 'wb' in list(e.keys()):
                     if (e['wb']['region'] is not None) and (len(e['wb']['region'])>1):
                         regs.append(e['wb']['region'].lower())
                         continue
@@ -157,7 +157,7 @@ class mne_pipeline():
             monopolar_channels = tal_reader.get_monopolar_channels()
             self.monopolar_channels = monopolar_channels
         except:
-            print 'Tal Struct could not be loaded!'
+            print('Tal Struct could not be loaded!')
             tal_struct = np.nan
             self.monopolar_channels = np.nan
             bipolar_pairs = np.nan
@@ -182,7 +182,7 @@ class mne_pipeline():
             MTLelecs = [elecidx for elecidx, l in enumerate(regs) if l in MTL_labels]
 
             if len(MTLelecs) < 2:
-                print 'Less than 2 MTL electrodes!'
+                print('Less than 2 MTL electrodes!')
                 raise ValueError
 
             MTL_info = self.tal_struct[MTLelecs]
@@ -190,7 +190,7 @@ class mne_pipeline():
             MTL_dict['locTag'] = regs[MTLelecs]
             MTL_dict['tagName'] = list(self.tal_struct[MTLelecs]['tagName'])
             
-            import cPickle as pk
+            import pickle as pk
             try:
                 pk.dump(MTL_dict, open(self.root+''+sub+'/MTL_info_AvgRef.pk', 'wb'))
                 #np.save(self.root+''+sub+'/MTL_info_AvgRef.npy', MTL_info)
@@ -226,7 +226,7 @@ class mne_pipeline():
             bipolar_pairs = tal_reader.get_bipolar_pairs()
             self.monopolar_channels = monopolar_channels
         except:
-            print 'Tal Struct could not be loaded!'
+            print('Tal Struct could not be loaded!')
             tal_struct = np.nan
             self.monopolar_channels = np.nan
             bipolar_pairs = np.nan
@@ -251,7 +251,7 @@ class mne_pipeline():
             MTLelecs = [elecidx for elecidx, l in enumerate(regs) if l in MTL_labels]
 
             if len(MTLelecs) < 2:
-                print 'Less than 2 MTL electrodes!'
+                print('Less than 2 MTL electrodes!')
                 raise ValueError
 
             MTL_info = self.tal_struct[MTLelecs]
@@ -259,7 +259,7 @@ class mne_pipeline():
             MTL_dict['locTag'] = regs[MTLelecs]
             MTL_dict['tagName'] = self.tal_struct[MTLelecs]['tagName']
             
-            import cPickle as pk
+            import pickle as pk
             try:
                 pk.dump(MTL_dict, open(self.root+''+sub+'/MTL_info_bipol.pk', 'wb'))
                 #np.save(self.root+''+sub+'/MTL_info_bipol.npy', MTL_info)
@@ -1145,7 +1145,7 @@ class mne_pipeline():
                 raise ValueError('Insufficient Trial Count!')
                 return
             
-        print 'Computing for '+str(rec_idxs.size)+' remembered and '+str(nrec_idxs.size)+' not-rememebred events.'
+        print('Computing for '+str(rec_idxs.size)+' remembered and '+str(nrec_idxs.size)+' not-rememebred events.')
         
         cons_rec, freqs, times, n_epochs, n_tapers = mne.connectivity.spectral_connectivity(arr['recalled'][rec_idxs],
             method=self.conn_type, mode=self.mode, sfreq=sfreq, fmin=fmin, fmax=fmax,
@@ -1267,7 +1267,7 @@ class mne_pipeline():
                         fstats[i].append(null_diff_avg)
                     else:
                         fstats[i].append(null_diff)
-            print k
+            print(k)
         
         fstats = np.array(fstats)    
 

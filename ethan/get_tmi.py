@@ -7,7 +7,7 @@ def get_tmi(sub, task, nonstimtask, pthresh=0.0001):
     evs, ev_sessions = get_stim_events(sub, task)
 
     if len(evs)<25:
-        print 'Too few events!'
+        print('Too few events!')
         return
 
     try:
@@ -75,7 +75,7 @@ def get_tmi(sub, task, nonstimtask, pthresh=0.0001):
 
         anode_label = str(evs[evs['session']==sess][0]['stim_params']['anode_label'])
         cathode_label = str(evs[evs['session']==sess][0]['stim_params']['cathode_label'])
-        print anode_label+'-'+cathode_label
+        print(anode_label+'-'+cathode_label)
 
         T, p = ttest_rel(post_pows[ev_sessions==sess, :], pre_pows[ev_sessions==sess, :], axis=0, nan_policy='omit')
         T = np.array(T); T[T==0] = np.nan
@@ -85,13 +85,13 @@ def get_tmi(sub, task, nonstimtask, pthresh=0.0001):
         filt = np.logical_and(np.isfinite(T), np.isfinite(logit_conn)) #the GOOD electrodes
 
         if len(T[filt])<10:
-            print 'Too few electrodes!'
+            print('Too few electrodes!')
             tmi_Z.append(np.nan)
             tmi_R.append(np.nan)
             continue
 
         if ~no_tal_struct:
-            print 'Doing regression....'
+            print('Doing regression....')
             ### DO REGRESSION ###
             import statsmodels.formula.api as sm
             distmat = get_tal_distmat(tal_struct)
@@ -149,7 +149,7 @@ def get_tmi(sub, task, nonstimtask, pthresh=0.0001):
     mydict['stim_elec_idx'] = stim_elec_idx
     mydict['sessions'] = ev_sessions
 
-    import cPickle as pk
+    import pickle as pk
     import os
     try:
         os.mkdir('/scratch/esolo/tmi_analysis/'+sub+'/')
