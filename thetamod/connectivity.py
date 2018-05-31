@@ -1,5 +1,3 @@
-import functools
-
 import mne
 import numpy as np
 
@@ -7,13 +5,9 @@ from cml_pipelines import task
 from cmlreaders import CMLReader
 
 from ptsa.data import TimeSeriesX as TimeSeries
-from ptsa.data.filters import ButterworthFilter, MonopolarToBipolarMapper
-from ptsa.data.readers import (
-    BaseEventReader, EEGReader, JsonIndexReader, ParamsReader
-)
 
 __all__ = [
-    'get_resting_events',
+    'read_eeg_data',
 ]
 
 FREQUENCY_BANDS = {
@@ -44,55 +38,46 @@ FREQUENCY_BANDS = {
 }
 
 
-@task()
-def get_resting_events(reader, file_path=None):
-    """Gets "resting" events from the COUNTDOWN phase.
+# @task()
+def read_eeg_data(reader):
+    """Read EEG data from "resting" events in a single session. This selects 3
+    EEG epochs of 1 s each starting at offsets of 1, 3, and 7 seconds from the
+    beginning of the countdown phase.
 
     Parameters
     ----------
     reader : CMLReader
         The reader object.
-    file_path : str
-        Absolute path to the file to read (for testing purposes only)
 
     Returns
     -------
-    events : pd.DataFrame
+    eeg
+        EEG timeseries data.
+
+    Notes
+    -----
+    This assumes a countdown phase of at least 10 seconds in length.
 
     """
-    events = reader.load('events', file_path=file_path)
-    events = events[events.type == 'COUNTDOWN_START']
-    return events
+    events = reader.load('events')
+    countdowns = events[events.type == 'COUNTDOWN_START']
 
-    evsize = events.size
-    events = np.concatenate((events, events, events))
+    # get times in ms of countdowns relative to session start
+    start_times = countdowns.mstime.values - events.iloc[0].mstime
 
-    # Get samplerate to do eegoffsets
-    filename = events[0].eegfile.split('noreref')[0] + 'sources.json'
-    samplerate = ParamsReader(dataroot=events[0].eegfile,
-                              filename=filename).read()['samplerate']
+    # construct epochs
+    epochs = []
+    for start in start_times:
+        list_epochs = []
+        for offset in [1000, 3000, 7000]:
+            list_epochs.append((start + offset, start + offset + 1000))
+        epochs += list_epochs
 
-    # Look at first quarter of countdown
-    events[:evsize].eegoffset = (
-        events[:evsize].eegoffset + int(samplerate * 1.0)
-    )
-
-    # Look at last quarter of countdown
-    events[evsize:evsize * 2].eegoffset = (
-        events[evsize:evsize * 2].eegoffset + int(samplerate * 4.0)
-    )
-
-    events[evsize * 2:].eegoffset = events[evsize * 2:].eegoffset + int(samplerate * 7.0)
-
-    return events
+    eeg = reader.load_eeg(epochs=epochs)
+    return eeg
 
 
-@task()
-def read_eeg_data(subject, events):
-    """Read EEG data."""
-
-
-@task()
+# @task()
 def ptsa_to_mne(eegs, task_phase='resting'):
     """Convert PTSA :class:`TimeSeries` data to MNE :class:`EpochsArray` data.
 
@@ -126,161 +111,6 @@ def ptsa_to_mne(eegs, task_phase='resting'):
     return epochs
 
 
-def set_mne_structure_encoding(subject, events, channels=np.array([]),
-                               notch_filter=True, ref_scheme='bipolar',
-                               mtl_only=False, win_st=0.0, win_fin=1.0,
-                               buffer_time=0.0):
-    """Setup for MNE...
-
-    Parameters
-    ----------
-    subject : str
-    events : np.recarray
-    channels : np.ndarray
-    notch_filter : bool
-        Filter out line noise (default: True)
-    ref_scheme : str
-        One of: 'bipolar', 'average'
-    mtl_only : bool
-        Only consider MTL electrodes (default: False)
-    win_st : float
-        Window start (default: 0.0)
-    win_fin : float
-        Window stop (default: 1.0)
-    buffer_time : float
-        Buffer time (default: 0)
-
-    Returns
-    -------
-    TODO
-
-    Raises
-    ------
-    ValueError
-        When an invalid reference scheme is given.
-
-    """
-    if ref_scheme not in ['bipolar', 'average']:
-        raise ValueError("ref_scheme must be 'bipolar' or 'average'")
-
-    make_reader = functools.partial(EEGReader,
-                                    events=events, start_time=win_st,
-                                    end_time=win_fin,
-                                    buffer_time=buffer_time)
-    eeg_reader = make_reader(channels=channels)
-
-    try:
-        eegs = eeg_reader.read()
-        if eegs.shape[0] == 0:
-            # this subject needs monopolar channels to load data, even if we
-            # asked for all of them
-            if ref_scheme == 'average':
-                # FIXME
-                self.set_elec_info_avgref(good_elecs_only=self.good_elecs_only,
-                                          MTL_only=mtl_only)
-            if ref_scheme == 'bipolar':
-                # FIXME
-                self.set_elec_info_bipolar(good_elecs_only=self.good_elecs_only,
-                                           MTL_only=mtl_only)
-
-            eeg_reader = make_reader(channels=self.monopolar_channels)
-            eegs = eeg_reader.read()
-    except TypeError:
-        for evidx in range(len(events)):
-            if evidx == 0:
-                eegs = EEGReader(events=events[evidx:evidx+1],
-                                 channels=self.monopolar_channels,
-                                 start_time=win_st, end_time=win_fin,
-                                 buffer_time=buffer_time).read()
-                sr_to_use = eegs['samplerate']
-            else:
-                new_eeg = EEGReader(events=events[evidx:evidx+1],
-                                    channels=self.monopolar_channels,
-                                    start_time=win_st, end_time=win_fin,
-                                    buffer_time=buffer_time).read()
-                new_eeg['samplerate'] = sr_to_use
-                eegs = eegs.append(new_eeg, dim='events')
-
-    if 'bipolar_pairs' in list(eegs.coords):
-        bps_eeg = [list(i) for i in np.array(eegs['bipolar_pairs'])]
-        bps_tal = [list(i) for i in np.array(self.tal_struct['channel'])]
-        bps_eeg_good = []
-        bps_tal_good = []
-        for iidx, i in enumerate(bps_eeg):
-            for jidx, j in enumerate(bps_tal):
-                if i == j:
-                    bps_eeg_good.append(iidx)
-                    bps_tal_good.append(jidx)
-        bps_eeg_good = np.array(bps_eeg_good)
-        bps_tal_good = np.array(bps_tal_good)
-
-        eegs = eegs[bps_eeg_good]
-        self.tal_struct = self.tal_struct[bps_tal_good]
-
-        #Resave data
-        np.save(self.root+''+subject+'/elec_info_bipol.npy', self.tal_struct)
-
-    if ref_scheme == 'bipolar' and 'bipolar_pairs' not in list(eegs.coords):
-        # A non-BP ENS subject
-        m2b = MonopolarToBipolarMapper(time_series=eegs, bipolar_pairs=self.bipolar_pairs)
-        eegs = m2b.filter()
-
-    if notch_filter:
-        # Filter out line noise
-        if subject[0:2] == 'FR':
-            freq_range = [48., 52.]
-        else:
-            freq_range = [58., 62.]
-        b_filter = ButterworthFilter(time_series=eegs, freq_range=freq_range,
-                                     filt_type='stop', order=4)
-        eegs_filtered = b_filter.filter()
-
-        if samplerate is not None:
-            eegs_filtered = eegs_filtered.resampled(self.samplerate)
-    else:
-
-        if samplerate is not None:
-            eegs_filtered = eegs.resampled(self.samplerate)
-
-    # Create MNE dataset
-    n_channels = eegs_filtered.shape[0]
-    if self.tal_struct is not np.nan:
-        ch_names = list(self.tal_struct['tagName'])
-    else:
-        ch_names = [str(i) for i in range(n_channels)]
-    info = mne.create_info(ch_names, self.samplerate, ch_types='eeg')
-
-    # Reorganize data for MNE format
-    if self.ref_scheme == 'bipolar':
-        data = eegs_filtered.transpose('events', 'bipolar_pairs', 'time')
-    else:
-        try:
-            data = eegs_filtered.transpose('events', 'channels', 'time')
-        except:
-            data = eegs_filtered.transpose('events', 'bipolar_pairs', 'time')
-
-    # Create events array for MNE
-    mne_evs = np.empty([data['events'].shape[0], 3]).astype(int)
-    mne_evs[:, 0] = np.arange(data['events'].shape[0])
-    mne_evs[:, 1] = data['time'].shape[0]
-    mne_evs[:, 2] = list(self.evs.recalled)
-
-    if self.task_phase == 'resting':
-        event_id = dict(resting=0)
-    else:
-        event_id = dict(recalled=1, not_recalled=0)
-    tmin=0.0
-
-    arr = mne.EpochsArray(np.array(data), info, mne_evs, tmin, event_id)
-
-    if self.ref_scheme == 'average':
-        arr.set_eeg_reference(ref_channels=None)  #Set to average reference
-        arr.apply_proj()
-
-    self.arr = arr
-    self.session = self.evs.session
-
-
 def resting_state_connectivity(subject, experiment, session, localization=0,
                                montage=0):
     """Compute resting state connectivity coherence matrix.
@@ -304,4 +134,3 @@ def resting_state_connectivity(subject, experiment, session, localization=0,
 
     """
     freqs = FREQUENCY_BANDS['theta-alpha']
-    events = get_resting_events(subject, experiment, montage=montage)
