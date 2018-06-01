@@ -45,3 +45,11 @@ def test_ptsa_to_mne(subject, rhino_root):
     assert isinstance(converted, mne.EpochsArray)
     assert converted.info['nchan'] == 121
     assert converted.get_data().shape == (78, 121, 1000)
+
+
+@pytest.mark.rhino
+def test_resting_state_connectivity(subject, rhino_root):
+    reader = CMLReader(subject, 'FR1', 0, rootdir=rhino_root)
+    eegs = ptsa_to_mne([read_eeg_data(reader)])
+    conn = get_resting_state_connectivity(eegs)
+    pytest.set_trace()

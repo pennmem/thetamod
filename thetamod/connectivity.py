@@ -7,6 +7,7 @@ from cmlreaders import CMLReader
 from ptsa.data.TimeSeriesX import TimeSeriesX as TimeSeries
 
 __all__ = [
+    'get_resting_state_connectivity',
     'ptsa_to_mne',
     'read_eeg_data',
 ]
@@ -112,22 +113,12 @@ def ptsa_to_mne(eegs):
     return epochs
 
 
-def resting_state_connectivity(subject, experiment, session, localization=0,
-                               montage=0):
+def get_resting_state_connectivity(array):
     """Compute resting state connectivity coherence matrix.
 
     Parameters
     ----------
-    subject : str
-        Subject ID
-    experiment : str
-        Experiment type
-    session : int
-        Session number
-    localization : int
-        Localization number (default: 0)
-    montage : int
-        Montage number (default: 0)
+    array : mne.EpochsArray
 
     Returns
     -------
@@ -135,3 +126,25 @@ def resting_state_connectivity(subject, experiment, session, localization=0,
 
     """
     freqs = FREQUENCY_BANDS['theta-alpha']
+    fmin, fmax = freqs[0], freqs[-1]
+    sample_rate = 1000.
+    out = mne.connectivity.spectral_connectivity(array,
+                                                 method='coh',
+                                                 mode='multitaper',
+                                                 sfreq=sample_rate,
+                                                 fmin=fmin, fmax=fmax,
+                                                 faverage=True,
+                                                 tmin=0.0,
+                                                 mt_adaptive=False,
+                                                 n_jobs=1,
+                                                 verbose=False)
+    con, freqs, times, n_epochs, n_tapers = out
+
+    # FIXME: what is this?
+    cons_rec = con[:, :, 0]
+
+    # Symmetrize average network
+    mu = cons_rec
+    mu_full = np.nansum(np.array([mu, mu.T]), 0)
+    mu_full[np.diag_indices_from(mu_full)] = 0.0
+    return mu_full
