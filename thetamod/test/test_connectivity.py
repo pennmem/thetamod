@@ -2,6 +2,8 @@ import os
 from pkg_resources import resource_filename
 import pytest
 
+import mne
+
 from cmlreaders import CMLReader
 from thetamod.connectivity import *
 
@@ -30,3 +32,16 @@ def test_read_eeg(subject, rhino_root):
     # countdown
     expected_events = 13 * 3
     assert eeg.shape == (expected_events, 121, 1000)
+
+
+@pytest.mark.rhino
+def test_ptsa_to_mne(subject, rhino_root):
+    eegs = []
+    for session in [0, 1]:
+        reader = CMLReader(subject, 'FR1', session, rootdir=rhino_root)
+        eegs.append(read_eeg_data(reader))
+
+    converted = ptsa_to_mne(eegs)
+    assert isinstance(converted, mne.EpochsArray)
+    assert converted.info['nchan'] == 121
+    assert converted.get_data().shape == (78, 121, 1000)

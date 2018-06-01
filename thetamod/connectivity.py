@@ -4,9 +4,10 @@ import numpy as np
 from cml_pipelines import task
 from cmlreaders import CMLReader
 
-from ptsa.data import TimeSeriesX as TimeSeries
+from ptsa.data.TimeSeriesX import TimeSeriesX as TimeSeries
 
 __all__ = [
+    'ptsa_to_mne',
     'read_eeg_data',
 ]
 
@@ -78,36 +79,36 @@ def read_eeg_data(reader):
 
 
 # @task()
-def ptsa_to_mne(eegs, task_phase='resting'):
+def ptsa_to_mne(eegs):
     """Convert PTSA :class:`TimeSeries` data to MNE :class:`EpochsArray` data.
 
     Parameters
     ----------
-    eegs : TimeSeries
-    task_phase : str
-        Task phase to consider (default: 'resting')
+    eegs : List[TimeSeries] or TimeSeries
+        EEG data to convert to MNE format. This should already be organized in
+        events x channels x time ordering.
 
     Returns
     -------
     epochs : EpochsArray
 
     """
-    names = []  # FIXME
-    info = mne.create_info(names, eegs['samplerate'], ch_types='eeg')
-    data = eegs.transpose('events', 'channels', 'time')
+    if isinstance(eegs, TimeSeries):
+        eegs = [eegs]
 
-    events = np.empty([len(data['events']), 3], dtype=int)
-    events[:, 0] = list(range(len(data['events'])))
-    events[:, 1] = len(data['time'])
-    events[:, 2] = list(eegs['events'].recalled)
+    names = eegs[0]['channels'].data.tolist()
+    info = mne.create_info(names, eegs[0]['samplerate'], ch_types='eeg')
+    data = np.concatenate(eegs, axis=0)
 
-    event_id = (
-        {'resting': 0}
-        if task_phase == 'resting' else
-        {'recalled': 1, 'not_recalled': 0}
-    )
+    events = np.empty([data.shape[0], 3], dtype=int)
+    events[:, 0] = list(range(data.shape[0]))
+    # FIXME: are these ok?
+    events[:, 1] = 0
+    events[:, 2] = 0
+    event_id = {'resting': 0}
 
-    epochs = mne.EpochsArray(data, info, events, event_id=event_id)
+    epochs = mne.EpochsArray(data, info, events, event_id=event_id,
+                             verbose=False)
     return epochs
 
 
