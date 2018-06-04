@@ -1,8 +1,10 @@
 import os
+from pathlib import Path
 from pkg_resources import resource_filename
 import pytest
 
-import mne
+import numpy as np
+from numpy.testing import assert_equal
 
 from cmlreaders import CMLReader
 from thetamod.connectivity import *
@@ -35,21 +37,17 @@ def test_read_eeg(subject, rhino_root):
 
 
 @pytest.mark.rhino
-def test_ptsa_to_mne(subject, rhino_root):
-    eegs = []
-    for session in [0, 1]:
-        reader = CMLReader(subject, 'FR1', session, rootdir=rhino_root)
-        eegs.append(read_eeg_data(reader))
-
-    converted = ptsa_to_mne(eegs)
-    assert isinstance(converted, mne.EpochsArray)
-    assert converted.info['nchan'] == 121
-    assert converted.get_data().shape == (78, 121, 1000)
-
-
-@pytest.mark.rhino
-def test_resting_state_connectivity(subject, rhino_root):
+def test_resting_state_connectivity(rhino_root):
+    subject = "R1286J"
     reader = CMLReader(subject, 'FR1', 0, rootdir=rhino_root)
-    eegs = ptsa_to_mne([read_eeg_data(reader)])
-    conn = get_resting_state_connectivity(eegs)
+    eegs = read_eeg_data(reader)
+    conn = get_resting_state_connectivity(eegs.to_mne())
+
+    basename = ('{subject}_baseline3trials_network_theta-alpha.npy'
+                .format(subject=subject))
+    filename = Path(rhino_root).joinpath('scratch', 'esolo', 'tmi_analysis',
+                                         subject, basename)
+
+    data = np.load(filename)
     pytest.set_trace()
+    assert_equal(conn, data)

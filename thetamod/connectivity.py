@@ -4,11 +4,8 @@ import numpy as np
 from cml_pipelines import task
 from cmlreaders import CMLReader
 
-from ptsa.data.TimeSeriesX import TimeSeriesX as TimeSeries
-
 __all__ = [
     'get_resting_state_connectivity',
-    'ptsa_to_mne',
     'read_eeg_data',
 ]
 
@@ -77,40 +74,6 @@ def read_eeg_data(reader):
 
     eeg = reader.load_eeg(epochs=epochs)
     return eeg
-
-
-# @task()
-def ptsa_to_mne(eegs):
-    """Convert PTSA :class:`TimeSeries` data to MNE :class:`EpochsArray` data.
-
-    Parameters
-    ----------
-    eegs : List[TimeSeries] or TimeSeries
-        EEG data to convert to MNE format. This should already be organized in
-        events x channels x time ordering.
-
-    Returns
-    -------
-    epochs : EpochsArray
-
-    """
-    if isinstance(eegs, TimeSeries):
-        eegs = [eegs]
-
-    names = eegs[0]['channels'].data.tolist()
-    info = mne.create_info(names, eegs[0]['samplerate'], ch_types='eeg')
-    data = np.concatenate(eegs, axis=0)
-
-    events = np.empty([data.shape[0], 3], dtype=int)
-    events[:, 0] = list(range(data.shape[0]))
-    # FIXME: are these ok?
-    events[:, 1] = 0
-    events[:, 2] = 0
-    event_id = {'resting': 0}
-
-    epochs = mne.EpochsArray(data, info, events, event_id=event_id,
-                             verbose=False)
-    return epochs
 
 
 def get_resting_state_connectivity(array):
