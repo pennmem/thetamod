@@ -1,7 +1,6 @@
 import mne
 import numpy as np
 
-from cml_pipelines import task
 from cmlreaders import CMLReader
 
 __all__ = [
@@ -37,8 +36,7 @@ FREQUENCY_BANDS = {
 }
 
 
-# @task()
-def read_eeg_data(reader):
+def read_eeg_data(reader, reref=True):
     """Read EEG data from "resting" events in a single session. This selects 3
     EEG epochs of 1 s each starting at offsets of 1, 3, and 7 seconds from the
     beginning of the countdown phase.
@@ -47,6 +45,9 @@ def read_eeg_data(reader):
     ----------
     reader : CMLReader
         The reader object.
+    reref : bool
+        When True (the default), try to rereference data. This will fail when
+        data were recorded in bipolar mode.
 
     Returns
     -------
@@ -72,7 +73,12 @@ def read_eeg_data(reader):
             list_epochs.append((start + offset, start + offset + 1000))
         epochs += list_epochs
 
-    eeg = reader.load_eeg(epochs=epochs)
+    if reref:
+        scheme = reader.load('pairs')
+        eeg = reader.load_eeg(epochs=epochs, scheme=scheme)
+    else:
+        eeg = reader.load_eeg(epochs=epochs)
+
     return eeg
 
 
