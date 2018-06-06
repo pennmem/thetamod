@@ -1,9 +1,16 @@
+import functools
+
 import mne
 import numpy as np
+import pandas as pd
 
 from cmlreaders import CMLReader
+from cmlreaders.readers.eeg import milliseconds_to_events, \
+    milliseconds_to_samples, samples_to_milliseconds
 
 __all__ = [
+    'countdown_to_resting',
+    'get_countdown_events',
     'get_resting_state_connectivity',
     'read_eeg_data',
 ]
@@ -36,15 +43,54 @@ FREQUENCY_BANDS = {
 }
 
 
-def read_eeg_data(reader, reref=True):
-    """Read EEG data from "resting" events in a single session. This selects 3
-    EEG epochs of 1 s each starting at offsets of 1, 3, and 7 seconds from the
-    beginning of the countdown phase.
+def get_countdown_events(reader):
+    """Get all COUNTDOWN_START events.
+
+    Returns
+    -------
+    countdowns : pd.DataFrame
+
+    """
+    events = reader.load('events')
+    countdowns = events[events.type == 'COUNTDOWN_START']
+    return countdowns
+
+
+def countdown_to_resting(events, samplerate=1000):
+    """Convert countdown events to "resting" events: this selects 3 EEG epochs
+    of 1 s each starting at offsets of 1, 3, and 7 seconds from the beginning of
+    the countdown phase.
+
+    Parameters
+    ----------
+    events : pd.DataFrame
+    samplerate : float
+        Sample rate in samples per second.
+
+    Returns
+    -------
+    resting_events : pd.DataFrame
+        A DataFrame consisting of only the ``eegoffset`` field (the only one
+        needed to convert events to epochs).
+
+    """
+    to_millis = functools.partial(samples_to_milliseconds,
+                                  sample_rate=samplerate)
+    msoffsets = []
+    for offset in events.eegoffset:
+        msoffsets += [to_millis(offset) + s * 1000 for s in (1, 4, 7)]
+    return milliseconds_to_events(msoffsets, samplerate)
+
+
+def read_eeg_data(reader, events, reref=True):
+    """Read EEG data from events in a single session.
 
     Parameters
     ----------
     reader : CMLReader
         The reader object.
+    events : pd.DataFrame
+        Events to read.
     reref : bool
         When True (the default), try to rereference data. This will fail when
         data were recorded in bipolar mode.
@@ -59,25 +105,13 @@ def read_eeg_data(reader, reref=True):
     This assumes a countdown phase of at least 10 seconds in length.
 
     """
-    events = reader.load('events')
-    countdowns = events[events.type == 'COUNTDOWN_START']
-
-    # get times in ms of countdowns relative to session start
-    start_times = countdowns.mstime.values - events.iloc[0].mstime
-
-    # construct epochs
-    epochs = []
-    for start in start_times:
-        list_epochs = []
-        for offset in [1000, 3000, 7000]:
-            list_epochs.append((start + offset, start + offset + 1000))
-        epochs += list_epochs
-
     if reref:
         scheme = reader.load('pairs')
-        eeg = reader.load_eeg(epochs=epochs, scheme=scheme)
     else:
-        eeg = reader.load_eeg(epochs=epochs)
+        scheme = None
+
+    eeg = reader.load_eeg(events=events, rel_start=0, rel_stop=1000,
+                          scheme=scheme)
 
     return eeg
 
@@ -96,6 +130,7 @@ def get_resting_state_connectivity(array):
     """
     freqs = FREQUENCY_BANDS['theta-alpha']
     fmin, fmax = freqs[0], freqs[-1]
+    # fmin, fmax = 5., 13.
     sample_rate = 1000.
     out = mne.connectivity.spectral_connectivity(array,
                                                  method='coh',
