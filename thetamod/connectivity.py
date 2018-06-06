@@ -6,7 +6,7 @@ import pandas as pd
 
 from cmlreaders import CMLReader
 from cmlreaders.readers.eeg import milliseconds_to_events, \
-    milliseconds_to_samples, samples_to_milliseconds
+    samples_to_milliseconds
 
 __all__ = [
     'countdown_to_resting',

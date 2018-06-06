@@ -4,7 +4,7 @@ from pkg_resources import resource_filename
 import pytest
 
 import numpy as np
-from numpy.testing import assert_equal
+from numpy.testing import assert_equal, assert_almost_equal
 import pandas as pd
 
 from cmlreaders import CMLReader, get_data_index
@@ -68,6 +68,13 @@ def test_resting_state_connectivity(rhino_root):
         epochs += eeg.epochs
         data.append(eeg)
 
+    # Verify that events match Ethan's analysis; his events are ordered in an
+    # odd way, so we have to sort them to make sure they match
+    ethan = np.load(resource_filename("thetamod.test.data",
+                                      "R1354E_events_ethan.npy"))
+    assert_equal(sorted(ethan["eegoffset"]),
+                 sorted(pd.concat(all_resting).eegoffset.values))
+
     eegs = TimeSeries.concatenate(data)
     conn = get_resting_state_connectivity(eegs.to_mne())
 
@@ -82,8 +89,9 @@ def test_resting_state_connectivity(rhino_root):
              eeg=eegs.data,
              my_conn=conn,
              ethans_conn=data,
-             events=pd.concat(all_events).to_records(),
-             resting=pd.concat(all_resting).to_records(),
+             events=pd.concat(all_events, ignore_index=True).to_records(),
+             resting=pd.concat(all_resting, ignore_index=True).to_records(),
              epochs=epochs)
 
-    assert_equal(conn, data)
+    # assert_equal(conn, data)
+    assert_almost_equal(conn, data, 3)
