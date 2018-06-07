@@ -1,11 +1,11 @@
-from functools import partial
+import copy
 
-from mne import create_info, EpochsArray
 from mne.time_frequency import psd_multitaper
 import numpy as np
 import pandas as pd
 from scipy.special import logit
 from scipy.stats import ttest_rel, pearsonr
+import statsmodels.formula.api as sm
 
 from cmlreaders import CMLReader
 
@@ -137,29 +137,69 @@ def get_distances(pairs):
     return distmat
 
 
-def regress_distance():
+def regress_distance(pre_psd, post_psd, conn, distmat):
     """Do regression on channel distances.
 
     Parameters
     ----------
+    pre_psd : np.ndarray
+        Pre-stim power spectral density
+    post_psd : np.ndarray
+        Post-stim power spectral density
+    conn : np.ndarray
+        Connectivity matrix.
+    distmat : np.ndarray
+        Distance adjacency matrix as computed from :func:`get_distance`.
 
     Returns
     -------
+    results : dict
+        A dictionary of regression coefficients. Keys are "coefs" and
+        "null_coefs" for the true and null coefs, respectively.
 
     """
+    t, p = ttest_rel(post_psd, pre_psd, axis=0)
+    t[t == 0] = np.nan  # FIXME: why?
+    stim_channel = 0  # FIXME: get stim channel number
+    logit_conn = logit(conn[stim_channel])
+
+    X = np.empty((len(t), 3))
+    y = t
+
+    X[:, 0] = distmat[stim_channel]
+    X[:, 1] = logit_conn
+    X[:, 2] = np.ones(len(t))  # intercept
+
+    result = sm.OLS(y, X).fit()
+    coefs = copy.copy(result.params)
+
+    def shuffle_index(N, size):
+        idx = np.arange(size)
+        for _ in range(N):
+            np.random.shuffle(idx)
+            yield idx
+
+    # Get null coefficients by shuffling 1000 times
+    null_coefs = [
+        sm.OLS(y, X[idx, :]).fit().params
+        for idx in shuffle_index(1000, X.shape[0])
+    ]
+
+    results = {
+        "coefs": coefs,
+        "null_coefs": null_coefs,
+    }
+
+    return results
 
 
-def compute_tmi(events, channel_info, powers):
+def compute_tmi(regression_results):
     """Compute TMI scores.
 
     Parameters
     ----------
-    events : np.recarray
-        Events recarray.
-    channel_info : dict
-        Channel information.
-    powers : Dict[str, np.ndarray]
-        Pre- and post-stim powers.
+    regression_results : dict
+        Results from :func:`regress_distance`.
 
     Returns
     -------
@@ -167,18 +207,9 @@ def compute_tmi(events, channel_info, powers):
         Dictionary containing 'zscore' and 'rvalue' keys.
 
     """
-    events = pd.DataFrame.from_records(events)
-
     tmi = {
         'zscore': [],
         'rvalue': [],
     }
-
-    for i, session in enumerate(events.session.unique()):
-        pre_powers = powers['pre'][i]
-        post_powers = powers['post'][i]
-        t, p = ttest_rel(post_powers, pre_powers, axis=0, nan_policy='omit')
-
-        # TODO: distance regression
 
     return tmi
