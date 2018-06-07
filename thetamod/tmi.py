@@ -120,6 +120,15 @@ def compute_psd(eegs, fmin=5., fmax=8.):
     Returns
     -------
     powers : np.ndarray
+        Power spectral densities
+
+    Notes
+    -----
+    Ethan's method involves removing saturated events by looking at consecutive
+    numbers of zeros. This will not work in general because hardware bipolar
+    referencing can show saturation at other values. Instead, we assume here
+    that channels showing a lot of saturation are removed prior to computing
+    PSD.
 
     """
     ea = eegs.to_mne()

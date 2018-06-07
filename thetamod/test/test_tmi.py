@@ -34,6 +34,7 @@ def test_get_eeg(which, subject, experiment, session, shape, rhino_root):
 
 
 # FIXME: add local test with smaller dataset
+@pytest.mark.only
 @pytest.mark.rhino
 def test_compute_psd(rhino_root):
     ethan = np.load(resource_filename("thetamod.test.data",
