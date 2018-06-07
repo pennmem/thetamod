@@ -10,39 +10,6 @@ from scipy.stats import ttest_rel, pearsonr
 from cmlreaders import CMLReader
 
 
-def compute_distances(channel_info):
-    """Compute channel distances.
-
-    Parameters
-    ----------
-    channel_info : dict
-        Channel locations and other info.
-
-    Returns
-    -------
-    distmat : np.ndarray
-
-    """
-    pos = np.array([
-        (ch['atlases']['ind']['x'],
-         ch['atlases']['ind']['y'],
-         ch['atlases']['ind']['z'])
-        for ch in channel_info
-    ])
-
-    # iterate over electrode pairs and build the adjacency matrix
-    dist_mat = np.empty((len(pos), len(pos)))
-    dist_mat.fill(np.nan)
-    for i, e1 in enumerate(pos):
-        for j, e2 in enumerate(pos):
-            if i <= j:
-                dist_mat[i, j] = np.linalg.norm(e1 - e2, axis=0)
-                dist_mat[j, i] = np.linalg.norm(e1 - e2, axis=0)
-    distmat = 1./np.exp(dist_mat/120.)
-
-    return distmat
-
-
 def get_eeg(which, subject, experiment, session, buffer=50, window=900,
             stim_duration=500, reref=True, rootdir=None):
     """Get EEG data for pre- or post-stim periods.
@@ -138,6 +105,50 @@ def compute_psd(eegs, fmin=5., fmax=8.):
     return powers
 
 
+def get_distances(pairs):
+    """Get distances as an adjacency matrix.
+
+    Parameters
+    ----------
+    pairs : pd.DataFrame
+        A DataFrame as returned by cmlreaders.
+
+    Returns
+    -------
+    distmat : np.ndarray
+        Adjacency matrix using exp(-distance / 120).
+
+    """
+    # positions matrix shaped as N_channels x 3
+    pos = np.array([
+        [row["ind.{}".format(c)] for c in ("x", "y", "z")]
+        for _, row in pairs.iterrows()
+    ])
+
+    distmat = np.empty((len(pos), len(pos)))
+
+    for i, d1 in enumerate(pos):
+        for j, d2 in enumerate(pos):
+            if i <= j:
+                distmat[i, j] = np.linalg.norm(d1 - d2, axis=0)
+                distmat[j, i] = np.linalg.norm(d1 - d2, axis=0)
+
+    distmat = 1 / np.exp(distmat / 120.)
+    return distmat
+
+
+def regress_distance():
+    """Do regression on channel distances.
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    """
+
+
 def compute_tmi(events, channel_info, powers):
     """Compute TMI scores.
 
@@ -168,14 +179,6 @@ def compute_tmi(events, channel_info, powers):
         post_powers = powers['post'][i]
         t, p = ttest_rel(post_powers, pre_powers, axis=0, nan_policy='omit')
 
-        T = np.array(t)
-        T[T == 0] = np.nan
-
-        # FIXME: remove artifactual channels
-
-        # ignore channels with too few trials
-        T[np.sum(np.isfinite(post_powers), axis=0) < 20] = np.nan
-
-        # TODO
+        # TODO: distance regression
 
     return tmi

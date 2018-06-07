@@ -3,7 +3,7 @@ from pkg_resources import resource_filename
 import pytest
 
 import numpy as np
-from numpy.testing import assert_equal
+from numpy.testing import assert_equal, assert_almost_equal
 
 from cmlreaders import CMLReader
 from cmlreaders.readers.eeg import NumpyEEGReader
@@ -34,7 +34,6 @@ def test_get_eeg(which, subject, experiment, session, shape, rhino_root):
 
 
 # FIXME: add local test with smaller dataset
-@pytest.mark.only
 @pytest.mark.rhino
 def test_compute_psd(rhino_root):
     ethan = np.load(resource_filename("thetamod.test.data",
@@ -60,3 +59,21 @@ def test_compute_psd(rhino_root):
 
     assert_equal(ethan["pre"], pre_psd)
     assert_equal(ethan["post"], post_psd)
+
+
+@pytest.mark.only
+@pytest.xfail("a few values don't match for some reason")
+def test_get_distances():
+    pkg = "thetamod.test.data"
+
+    filename = resource_filename(pkg, "R1260D_pairs.json")
+    reader = CMLReader("R1260D")
+    pairs = reader.load("pairs", file_path=filename)
+
+    filename = resource_filename(pkg, "R1260D_distmat.npy")
+    ref_result = np.load(filename)
+    distmat = tmi.get_distances(pairs)
+
+    pytest.set_trace()
+
+    assert_almost_equal(distmat, ref_result)
