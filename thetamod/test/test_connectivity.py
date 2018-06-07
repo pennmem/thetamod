@@ -10,7 +10,6 @@ from cmlreaders import CMLReader, get_data_index
 from cmlreaders.timeseries import TimeSeries
 
 from thetamod.connectivity import *
-from thetamod.test.fixtures import rhino_root  # noqa
 
 
 @pytest.fixture

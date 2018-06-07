@@ -1,5 +1,3 @@
-"""Common test fixtures."""
-
 import os
 import pytest
 

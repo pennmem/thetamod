@@ -44,7 +44,7 @@ def compute_distances(channel_info):
 
 
 def get_eeg(which, subject, experiment, session, buffer=50, window=900,
-            rootdir=None):
+            stim_duration=500, reref=True, rootdir=None):
     """Get EEG data for pre- or post-stim periods.
 
     Parameters
@@ -61,12 +61,21 @@ def get_eeg(which, subject, experiment, session, buffer=50, window=900,
         Time in ms pre-stim to avoid (default: 50).
     window : int
         Evaluation window length in ms (default: 900).
+    stim_duration : int
+        Stimulation duration in ms (default: 500).
+    reref : bool
+        Try to rereference EEG data (will fail if recorded in hardware bipolar
+        mode). Default: True.
     rootdir : str
         Path to rhino's root directory.
 
     Returns
     -------
     eeg : TimeSeries
+
+    Notes
+    -----
+    This assumes all stim durations are the same.
 
     """
     if which not in ["pre", "post"]:
@@ -80,27 +89,29 @@ def get_eeg(which, subject, experiment, session, buffer=50, window=900,
         rel_start = -(buffer + window)
         rel_stop = -buffer
     else:
-        rel_start = buffer
-        rel_stop = buffer + window
+        rel_start = buffer + stim_duration
+        rel_stop = buffer + stim_duration + window
+
+    if reref:
+        scheme = reader.load("pairs")
+    else:
+        scheme = None
 
     eeg = reader.load_eeg(events=stim_events,
                           rel_start=rel_start,
-                          rel_stop=rel_stop)
+                          rel_stop=rel_stop,
+                          scheme=scheme)
 
     return eeg
 
 
-def compute_psd(eegs, pre=(0.05, 0.95), post=(1.55, 2.45), fmin=5., fmax=8.):
+def compute_psd(eegs, fmin=5., fmax=8.):
     """Compute power spectral density using multitapers.
 
     Parameters
     ----------
     eegs : TimeSeries
         EEG data
-    pre : list-like
-        ???
-    post : list-like
-        ???
     fmin : float
         Minimum frequency of interest (default: 5)
     fmax : float
@@ -108,47 +119,14 @@ def compute_psd(eegs, pre=(0.05, 0.95), post=(1.55, 2.45), fmin=5., fmax=8.):
 
     Returns
     -------
-    power_dict : Dict[str, np.ndarray]
-        A dict of arrays with keys pre and post. Each entry is a
-        n_epochs x n_channels array.
+    powers : np.ndarray
 
     """
-    sr = int(eegs.samplerate)
-
-    # Get multitaper power for all channels first
-    eegs = eegs[:, :, :].transpose('events', 'bipolar_pairs', 'time')
-
-    # Break into pre/post stimulation periods
-    pre_clips = np.array(eegs[:, :, int(sr*pre[0]):int(sr * pre[1])])
-    post_clips = np.array(eegs[:, :, int(sr*post[0]):int(sr * post[1])])
-
-    # Get pre/post powers
-    mne_evs = np.empty([pre_clips.shape[0], 3]).astype(int)
-    mne_evs[:, 0] = np.arange(pre_clips.shape[0])
-    mne_evs[:, 1] = pre_clips.shape[2]
-    mne_evs[:, 2] = list(np.zeros(pre_clips.shape[0]))
-    event_id = dict(resting=0)
-    tmin = 0.0
-    info = create_info([str(i) for i in range(eegs.shape[1])], sr, ch_types='eeg')
-
-    pre_arr = EpochsArray(np.array(pre_clips), info, mne_evs, tmin, event_id)
-    post_arr = EpochsArray(np.array(post_clips), info, mne_evs, tmin, event_id)
-
-    # Use MNE for multitaper power
-    get_psd = partial(psd_multitaper,
-                      fmin=fmin, fmax=fmax, tmin=tmin, verbose=False)
-    pre_pows, fdone = get_psd(pre_arr)
-    post_pows, fdone = get_psd(post_arr)
-
-    # shape: n_epochs, n_channels
-    pre_pows = np.mean(np.log10(pre_pows), 2)
-    post_pows = np.mean(np.log10(post_pows), 2)
-
-    power_dict = {
-        'pre': pre_pows,
-        'post': post_pows,
-    }
-    return power_dict
+    ea = eegs.to_mne()
+    pows, fdone = psd_multitaper(ea, fmin=fmin, fmax=fmax, tmin=0.0,
+                                 verbose=False)
+    powers = np.mean(np.log10(pows), 2)
+    return powers
 
 
 def compute_tmi(events, channel_info, powers):
