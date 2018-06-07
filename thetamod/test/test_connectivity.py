@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from pkg_resources import resource_filename
 import pytest
@@ -11,11 +10,7 @@ from cmlreaders import CMLReader, get_data_index
 from cmlreaders.timeseries import TimeSeries
 
 from thetamod.connectivity import *
-
-
-@pytest.fixture
-def rhino_root():
-    return os.path.expanduser(os.environ.get('RHINO_ROOT', '/'))
+from thetamod.test.fixtures import rhino_root  # noqa
 
 
 @pytest.fixture

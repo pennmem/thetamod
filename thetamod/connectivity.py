@@ -125,7 +125,7 @@ def get_resting_state_connectivity(array):
 
     Returns
     -------
-    ???
+    Coherence matrix.
 
     """
     freqs = FREQUENCY_BANDS['theta-alpha']
@@ -144,7 +144,7 @@ def get_resting_state_connectivity(array):
                                                  verbose=False)
     con, freqs, times, n_epochs, n_tapers = out
 
-    # FIXME: what is this?
+    # copied directly from Ethan's code
     cons_rec = con[:, :, 0]
 
     # Symmetrize average network

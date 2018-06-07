@@ -7,6 +7,8 @@ import pandas as pd
 from scipy.special import logit
 from scipy.stats import ttest_rel, pearsonr
 
+from cmlreaders import CMLReader
+
 
 def compute_distances(channel_info):
     """Compute channel distances.
@@ -39,6 +41,53 @@ def compute_distances(channel_info):
     distmat = 1./np.exp(dist_mat/120.)
 
     return distmat
+
+
+def get_eeg(which, subject, experiment, session, buffer=50, window=900,
+            rootdir=None):
+    """Get EEG data for pre- or post-stim periods.
+
+    Parameters
+    ----------
+    which : str
+        "pre" or "post"
+    subject : str
+        Subject ID.
+    experiment : str
+        Experiment name.
+    session : int
+        Session number.
+    buffer : int
+        Time in ms pre-stim to avoid (default: 50).
+    window : int
+        Evaluation window length in ms (default: 900).
+    rootdir : str
+        Path to rhino's root directory.
+
+    Returns
+    -------
+    eeg : TimeSeries
+
+    """
+    if which not in ["pre", "post"]:
+        raise ValueError("Specify 'pre' or 'post'")
+
+    reader = CMLReader(subject, experiment, session, rootdir=rootdir)
+    events = reader.load("events")
+    stim_events = events[events.type == "STIM_ON"]
+
+    if which == "pre":
+        rel_start = -(buffer + window)
+        rel_stop = -buffer
+    else:
+        rel_start = buffer
+        rel_stop = buffer + window
+
+    eeg = reader.load_eeg(events=stim_events,
+                          rel_start=rel_start,
+                          rel_stop=rel_stop)
+
+    return eeg
 
 
 def compute_psd(eegs, pre=(0.05, 0.95), post=(1.55, 2.45), fmin=5., fmax=8.):
