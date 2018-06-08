@@ -47,7 +47,6 @@ def test_resting_state_connectivity(rhino_root):
 
     all_events = []
     all_resting = []
-    epochs = []
     data = []
 
     for session in sessions:
@@ -59,7 +58,6 @@ def test_resting_state_connectivity(rhino_root):
         all_resting.append(resting)
 
         eeg = read_eeg_data(reader, resting, reref=False)
-        epochs += eeg.epochs
         data.append(eeg)
 
     # Verify that events match Ethan's analysis; his events are ordered in an
@@ -84,8 +82,7 @@ def test_resting_state_connectivity(rhino_root):
              my_conn=conn,
              ethans_conn=data,
              events=pd.concat(all_events, ignore_index=True).to_records(),
-             resting=pd.concat(all_resting, ignore_index=True).to_records(),
-             epochs=epochs)
+             resting=pd.concat(all_resting, ignore_index=True).to_records())
 
     # assert_equal(conn, data)
     assert_almost_equal(conn, data, 3)

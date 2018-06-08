@@ -10,20 +10,62 @@ import statsmodels.formula.api as sm
 from cmlreaders import CMLReader
 
 
-def get_eeg(which, subject, experiment, session, buffer=50, window=900,
-            stim_duration=500, reref=True, rootdir=None):
+def get_stim_events(reader):
+    """Get all stim events.
+
+    Parameters
+    ----------
+    reader : CMLReader
+
+    Returns
+    -------
+    stim_events : pd.DataFrame
+
+    """
+    events = reader.load("events")
+    stim_events = events[events.type == "STIM_ON"]
+    return stim_events
+
+
+def get_stim_channels(stim_events):
+    """Extract unique stim channels from stim events.
+
+    Parameters
+    ----------
+    stim_events : pd.DataFrame
+        Stimulation events.
+
+    Returns
+    -------
+    pairs : List[Tuple[int, int]]
+        A list of unique stim contact numbers. Note that these numbers are the
+        0-based indices.
+
+    """
+    stim_params = pd.DataFrame([
+        row for row in stim_events[stim_events.type == "STIM_ON"].stim_params
+    ])
+
+    pairs = [np.unique([
+        (row.anode_number - 1, row.cathode_number - 1)
+        for _, row in stim_params.iterrows()
+    ])]
+
+    return [tuple(pair) for pair in pairs]
+
+
+def get_eeg(which, reader, stim_events, buffer=50, window=900,
+            stim_duration=500, reref=True):
     """Get EEG data for pre- or post-stim periods.
 
     Parameters
     ----------
     which : str
         "pre" or "post"
-    subject : str
-        Subject ID.
-    experiment : str
-        Experiment name.
-    session : int
-        Session number.
+    reader : CMLReader
+        Reader for loading EEG data.
+    stim_events : pd.DataFrame
+        Stimulation events as a DataFrame.
     buffer : int
         Time in ms pre-stim to avoid (default: 50).
     window : int
@@ -33,8 +75,6 @@ def get_eeg(which, subject, experiment, session, buffer=50, window=900,
     reref : bool
         Try to rereference EEG data (will fail if recorded in hardware bipolar
         mode). Default: True.
-    rootdir : str
-        Path to rhino's root directory.
 
     Returns
     -------
@@ -47,10 +87,6 @@ def get_eeg(which, subject, experiment, session, buffer=50, window=900,
     """
     if which not in ["pre", "post"]:
         raise ValueError("Specify 'pre' or 'post'")
-
-    reader = CMLReader(subject, experiment, session, rootdir=rootdir)
-    events = reader.load("events")
-    stim_events = events[events.type == "STIM_ON"]
 
     if which == "pre":
         rel_start = -(buffer + window)
@@ -157,6 +193,16 @@ def regress_distance(pre_psd, post_psd, conn, distmat):
         A dictionary of regression coefficients. Keys are "coefs" and
         "null_coefs" for the true and null coefs, respectively.
 
+    Notes
+    -----
+    The model used here is ..math::
+
+        \vec{y} = \beta_0 \vec{x}_0 + \beta_1 \vec{x}_1 + \beta_2 \vec{x}_2
+
+    where :math:`\vec{x}_1` are the distance adjacency values for all stim
+    channels, :math:`\vec{x}_2` is the logistic transform of the connectivity
+    matrix, and :math:`\vec{x}_2` is the intercept.
+
     """
     t, p = ttest_rel(post_psd, pre_psd, axis=0)
     t[t == 0] = np.nan  # FIXME: why?
@@ -169,6 +215,9 @@ def regress_distance(pre_psd, post_psd, conn, distmat):
     X[:, 0] = distmat[stim_channel]
     X[:, 1] = logit_conn
     X[:, 2] = np.ones(len(t))  # intercept
+
+    print(conn[stim_channel])
+    print(X)
 
     result = sm.OLS(y, X).fit()
     coefs = copy.copy(result.params)
@@ -207,9 +256,24 @@ def compute_tmi(regression_results):
         Dictionary containing 'zscore' and 'rvalue' keys.
 
     """
+    coefs = regression_results["coefs"]
+    null_coefs = regression_results["null_coefs"]
+
+    zscores = []
+    pvalues = []
+
+    for i, coef in enumerate(coefs):
+        zscores.append(
+            (coef - np.nanmean(null_coefs[:, i])) / np.nanstd(null_coefs)
+        )
+        pvalues.append(np.sum(null_coefs[:, i] > coef) / len(null_coefs))
+
+    # TODO: r values
+
     tmi = {
-        'zscore': [],
-        'rvalue': [],
+        "zscore": zscores,
+        "pvalue": pvalues,
+        "rvalue": [],
     }
 
     return tmi
