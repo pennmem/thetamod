@@ -1,11 +1,10 @@
-from functools import partial, wraps
+import functools
 from typing import Optional
 
 from dask.delayed import Delayed
 import numpy as np
 
-from cml_pipelines import make_task
-from cml_pipelines.wrapper import memory
+from cml_pipelines import make_task, memory
 from cmlreaders import CMLReader, get_data_index
 from cmlreaders.timeseries import TimeSeries
 
@@ -14,7 +13,7 @@ from . import connectivity, tmi
 
 def clear_cache_on_completion(func):
     """Clears the joblib cache on completion of func."""
-    @wraps(func)
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         memory.clear(warn=False)
@@ -38,23 +37,22 @@ class TMIPipeline(object):
         pairs = reader.load("pairs")
 
         stim_events = make_task(tmi.get_stim_events, reader)
-        stim_channels = make_task(tmi.get_stim_channels, stim_events)
+        stim_channels = make_task(tmi.get_stim_channels, pairs, stim_events)
 
-        get_eeg = partial(tmi.get_eeg,
-                          reader=reader,
-                          stim_events=stim_events,
-                          reref=True)
+        reref = True  # FIXME
 
-        pre_eeg = make_task(get_eeg, "pre")
-        post_eeg = make_task(get_eeg, "post")
+        pre_eeg, post_eeg = [
+            make_task(tmi.get_eeg, which, reader, stim_events, reref=reref,
+                      cache=False)
+            for which in ("pre", "post")
+        ]
 
         distmat = make_task(tmi.get_distances, pairs)
 
         pre_psd = make_task(tmi.compute_psd, pre_eeg)
         post_psd = make_task(tmi.compute_psd, post_eeg)
 
-        conn = make_task(self.get_resting_connectivity,
-                         self.subject, self.rootdir)
+        conn = make_task(self.get_resting_connectivity)
         regression = make_task(tmi.regress_distance,
                                pre_psd, post_psd, conn, distmat, stim_channels)
 
@@ -63,9 +61,9 @@ class TMIPipeline(object):
         return result
 
     @clear_cache_on_completion
-    def run(self):
+    def run(self, get=None):
         """Run the pipeline and return the results."""
-        return self._pipeline.compute()
+        return self._pipeline.compute(get=get)
 
     def get_reader(self, subject: Optional[str] = None,
                    experiment: Optional[str] = None,

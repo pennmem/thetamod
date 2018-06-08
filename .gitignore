@@ -1,6 +1,10 @@
 events.h5
 test_output.npz
 .ipynb_checkpoints/
+cml_pipelines_cache/
+dask-worker-space/
+mydask.png
+.pytest_cache/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -27,31 +27,34 @@ def get_stim_events(reader):
     return stim_events
 
 
-def get_stim_channels(stim_events):
+def get_stim_channels(pairs, stim_events):
     """Extract unique stim channels from stim events.
 
     Parameters
     ----------
+    pairs : pd.DataFrame
+        Channel info.
     stim_events : pd.DataFrame
         Stimulation events.
 
     Returns
     -------
-    pairs : List[Tuple[int, int]]
-        A list of unique stim contact numbers. Note that these numbers are the
-        0-based indices.
+    indices : List[int]
+        List of channel indices for each stim channel.
 
     """
     stim_params = pd.DataFrame([
         row for row in stim_events[stim_events.type == "STIM_ON"].stim_params
     ])
 
-    pairs = [np.unique([
-        (row.anode_number - 1, row.cathode_number - 1)
+    labels = np.unique([
+        "{}-{}".format(row.anode_label, row.cathode_label)
         for _, row in stim_params.iterrows()
-    ])]
+    ])
 
-    return [tuple(pair) for pair in pairs]
+    indices = [pairs[pairs.label == label].index[0] for label in labels]
+
+    return indices
 
 
 def get_eeg(which, reader, stim_events, buffer=50, window=900,
@@ -186,8 +189,8 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channels):
         Connectivity matrix.
     distmat : np.ndarray
         Distance adjacency matrix as computed from :func:`get_distance`.
-    stim_channels : List[Tuple[int, int]]
-        Stim channels as a list of (anode, cathode) contact numbers.
+    stim_channels : List[int]
+        Stim channels as a list of channel indices.
 
     Returns
     -------
@@ -208,17 +211,20 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channels):
     """
     t, p = ttest_rel(post_psd, pre_psd, axis=0)
     t[t == 0] = np.nan  # FIXME: why?
-    stim_channel = 0  # FIXME: get stim channel number
-    logit_conn = logit(conn[stim_channel])
 
-    X = np.empty((len(t), 3))
+    # FIXME: I think this needs to be done per stim channel? otherwise shapes are wrong
+    logit_conn = logit(conn[stim_channels])
+
+    size = np.sum(~np.isnan(t))
+    X = np.empty((size, 3))
     y = t
 
-    X[:, 0] = distmat[stim_channel]
-    X[:, 1] = logit_conn
-    X[:, 2] = np.ones(len(t))  # intercept
+    import pdb; pdb.set_trace()
+    X[:, 0] = distmat[stim_channels][~np.isnan(t)]
+    X[:, 1] = logit_conn[~np.isnan(t)]
+    X[:, 2] = np.ones(size)  # intercept
 
-    print(conn[stim_channel])
+    print(conn[stim_channels])
     print(X)
 
     result = sm.OLS(y, X).fit()
