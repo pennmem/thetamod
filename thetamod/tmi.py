@@ -173,7 +173,7 @@ def get_distances(pairs):
     return distmat
 
 
-def regress_distance(pre_psd, post_psd, conn, distmat):
+def regress_distance(pre_psd, post_psd, conn, distmat, stim_channels):
     """Do regression on channel distances.
 
     Parameters
@@ -186,6 +186,8 @@ def regress_distance(pre_psd, post_psd, conn, distmat):
         Connectivity matrix.
     distmat : np.ndarray
         Distance adjacency matrix as computed from :func:`get_distance`.
+    stim_channels : List[Tuple[int, int]]
+        Stim channels as a list of (anode, cathode) contact numbers.
 
     Returns
     -------
