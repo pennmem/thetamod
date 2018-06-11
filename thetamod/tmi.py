@@ -219,7 +219,6 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channels):
     X = np.empty((size, 3))
     y = t
 
-    import pdb; pdb.set_trace()
     X[:, 0] = distmat[stim_channels][~np.isnan(t)]
     X[:, 1] = logit_conn[~np.isnan(t)]
     X[:, 2] = np.ones(size)  # intercept
