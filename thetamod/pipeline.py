@@ -23,11 +23,14 @@ def clear_cache_on_completion(func):
 
 class TMIPipeline(object):
     def __init__(self, subject: str, experiment: str, session: int,
-                 rootdir: Optional[str] = None):
+                 rootdir: Optional[str] = None, reref: bool = True,
+                 nperms=1000):
         self.subject = subject
         self.experiment = experiment
         self.session = session
         self.rootdir = rootdir
+        self.reref = reref
+        self.nperms = nperms
 
         self._pipeline = self._build_pipeline()
 
@@ -39,7 +42,7 @@ class TMIPipeline(object):
         stim_events = make_task(tmi.get_stim_events, reader)
         stim_channels = make_task(tmi.get_stim_channels, pairs, stim_events)
 
-        reref = True  # FIXME
+        reref = self.reref
 
         pre_eeg, post_eeg = [
             make_task(tmi.get_eeg, which, reader, stim_events, reref=reref,
@@ -59,6 +62,28 @@ class TMIPipeline(object):
         result = make_task(tmi.compute_tmi, regression)
 
         return result
+
+    def run_nodask(self):
+        reader = self.get_reader()
+        pairs = reader.load("pairs")
+
+        stim_events = tmi.get_stim_events(reader)
+        stim_channels = tmi.get_stim_channels(pairs, stim_events)
+
+        pre_eeg, post_eeg = (
+            tmi.get_eeg(which, reader, stim_events, reref=self.reref,)
+            for which in ("pre", "post")
+        )
+        distmat = tmi.get_distances(pairs)
+        pre_psd, post_psd = (tmi.compute_psd(eeg) for eeg in (pre_eeg, post_eeg))
+        conn = self.get_resting_connectivity()
+
+        regressions = [tmi.regress_distance(pre_psd, post_psd,
+                                          conn, distmat,channel,self.nperms)
+                       for channel in stim_channels
+                       ]
+        return [tmi.compute_tmi(regression) for regression in regressions]
+
 
     @clear_cache_on_completion
     def run(self, get=None):
@@ -95,5 +120,6 @@ class TMIPipeline(object):
             eeg_data.append(eeg)
 
         eegs = TimeSeries.concatenate(eeg_data)
-        conn = connectivity.get_resting_state_connectivity(eegs.to_mne())
+        conn = connectivity.get_resting_state_connectivity(eegs.to_mne(),
+                                                           eegs.samplerate)
         return conn
