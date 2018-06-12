@@ -68,7 +68,7 @@ def test_resting_state_connectivity(rhino_root):
                  sorted(pd.concat(all_resting).eegoffset.values))
 
     eegs = TimeSeries.concatenate(data)
-    conn = get_resting_state_connectivity(eegs.to_mne())
+    conn = get_resting_state_connectivity(eegs.to_mne(), eegs.samplerate)
 
     basename = ('{subject}_baseline3trials_network_theta-alpha.npy'
                 .format(subject=subject))

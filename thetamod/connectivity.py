@@ -116,12 +116,14 @@ def read_eeg_data(reader, events, reref=True):
     return eeg
 
 
-def get_resting_state_connectivity(array):
+def get_resting_state_connectivity(array, samplerate):
     """Compute resting state connectivity coherence matrix.
 
     Parameters
     ----------
     array : mne.EpochsArray
+
+    samplerate: int
 
     Returns
     -------
@@ -131,11 +133,10 @@ def get_resting_state_connectivity(array):
     freqs = FREQUENCY_BANDS['theta-alpha']
     fmin, fmax = freqs[0], freqs[-1]
     # fmin, fmax = 5., 13.
-    sample_rate = 1000.
     out = mne.connectivity.spectral_connectivity(array,
                                                  method='coh',
                                                  mode='multitaper',
-                                                 sfreq=sample_rate,
+                                                 sfreq=samplerate,
                                                  fmin=fmin, fmax=fmax,
                                                  faverage=True,
                                                  tmin=0.0,
@@ -150,5 +151,5 @@ def get_resting_state_connectivity(array):
     # Symmetrize average network
     mu = cons_rec
     mu_full = np.nansum(np.array([mu, mu.T]), 0)
-    mu_full[np.diag_indices_from(mu_full)] = 0.0
+    mu_full[np.diag_indices_from(mu_full)] = np.finfo(mu_full.dtype).eps
     return mu_full
