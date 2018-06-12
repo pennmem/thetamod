@@ -7,8 +7,6 @@ from scipy.special import logit
 from scipy.stats import ttest_rel, pearsonr
 import statsmodels.formula.api as sm
 
-from cmlreaders import CMLReader
-
 
 def get_stim_events(reader):
     """Get all stim events.
@@ -176,7 +174,7 @@ def get_distances(pairs):
     return distmat
 
 
-def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idx,
+def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
                      nperms=1000):
     """Do regression on channel distances.
 
@@ -195,9 +193,10 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idx,
 
     Returns
     -------
-    results : dict
-        A dictionary of regression coefficients. Keys are "coefs" and
-        "null_coefs" for the true and null coefs, respectively.
+    results : List[dict]
+        A list of dictionaries of regression coefficients, one per stim channel.
+        Keys are "coefs" and "null_coefs" for the true and null coefs,
+        respectively.
 
     Notes
     -----
@@ -214,69 +213,73 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idx,
     t, p = ttest_rel(post_psd, pre_psd, axis=0)
     t[t == 0] = np.nan  # FIXME: why?
 
-    logit_conn = logit(conn[stim_channel_idx])
+    results = []
+    for stim_channel_idx in stim_channel_idxs:
+        logit_conn = logit(conn[stim_channel_idx])
 
-    size = np.sum(np.isfinite(t))
-    X = np.empty((size, 3))
-    y = t
+        size = np.sum(np.isfinite(t))
+        X = np.empty((size, 3))
+        y = t
 
-    X[:, 0] = distmat[stim_channel_idx][np.isfinite(t)]
-    X[:, 1] = logit_conn[np.isfinite(t)]
-    X[:, 2] = np.ones(size)  # intercept
+        X[:, 0] = distmat[stim_channel_idx][np.isfinite(t)]
+        X[:, 1] = logit_conn[np.isfinite(t)]
+        X[:, 2] = np.ones(size)  # intercept
 
-    # print(conn[stim_channel_idx])
-    # print(X)
-    assert np.isfinite(X).all()
+        # print(conn[stim_channel_idx])
+        # print(X)
+        assert np.isfinite(X).all()
 
-    rval, _ = pearsonr(t, logit_conn)
+        rval, _ = pearsonr(t, logit_conn)
 
-    result = sm.OLS(y, X).fit()
-    coefs = copy.copy(result.params)
+        result = sm.OLS(y, X).fit()
+        coefs = copy.copy(result.params)
 
-    def shuffle_index(N, size):
-        idx = np.arange(size)
-        for _ in range(N):
-            np.random.shuffle(idx)
-            yield idx
+        def shuffle_index(N, size):
+            idx = np.arange(size)
+            for _ in range(N):
+                np.random.shuffle(idx)
+                yield idx
 
-    # Get null coefficients by shuffling 1000 times
-    null_coefs = [
-        sm.OLS(y, X[idx, :]).fit().params
-        for idx in shuffle_index(nperms, X.shape[0])
-    ]
+        # Get null coefficients by shuffling 1000 times
+        null_coefs = [
+            sm.OLS(y, X[idx, :]).fit().params
+            for idx in shuffle_index(nperms, X.shape[0])
+        ]
 
-    results = {
-        "coefs": np.array(coefs),
-        "null_coefs": np.array(null_coefs),
-        "rvalue": rval
-    }
+        results.append({
+            "coefs": np.array(coefs),
+            "null_coefs": np.array(null_coefs),
+            "rvalue": rval
+        })
 
     return results
 
 
-def compute_tmi(regression_results):
+def compute_tmi(regression_results_list):
     """Compute TMI scores.
 
     Parameters
     ----------
-    regression_results : dict
+    regression_results : List[dict]
         Results from :func:`regress_distance`.
 
     Returns
     -------
-    tmi : dict
-        Dictionary containing 'zscore' and 'rvalue' keys.
+    tmi : List[dict]
+        List of dictionaries containing 'zscore' and 'rvalue' keys.
 
     """
-    coefs = regression_results["coefs"]
-    null_coefs = regression_results["null_coefs"]
-    rvalue = regression_results["rvalue"]
+    tmi = []
+    for regression_results in regression_results_list:
+        coefs = regression_results["coefs"]
+        null_coefs = regression_results["null_coefs"]
+        rvalue = regression_results["rvalue"]
 
-    zscores = (coefs - np.nanmean(null_coefs,0)) / np.nanstd(null_coefs,0)
+        zscores = (coefs - np.nanmean(null_coefs,0)) / np.nanstd(null_coefs,0)
 
-    tmi = {
-        "zscore": zscores[1],
-        "rvalue": rvalue,
-    }
+        tmi.append({
+            "zscore": zscores[1],
+            "rvalue": rvalue,
+        })
 
     return tmi

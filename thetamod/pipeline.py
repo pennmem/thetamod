@@ -56,12 +56,12 @@ class TMIPipeline(object):
         post_psd = make_task(tmi.compute_psd, post_eeg)
 
         conn = make_task(self.get_resting_connectivity)
-        regression = make_task(tmi.regress_distance,
+        regressions = make_task(tmi.regress_distance,
                                pre_psd, post_psd, conn, distmat, stim_channels)
 
-        result = make_task(tmi.compute_tmi, regression)
+        results = make_task(tmi.compute_tmi, regressions)
 
-        return result
+        return results
 
     def run_nodask(self):
         reader = self.get_reader()
@@ -78,12 +78,10 @@ class TMIPipeline(object):
         pre_psd, post_psd = (tmi.compute_psd(eeg) for eeg in (pre_eeg, post_eeg))
         conn = self.get_resting_connectivity()
 
-        regressions = [tmi.regress_distance(pre_psd, post_psd,
-                                          conn, distmat,channel,self.nperms)
-                       for channel in stim_channels
-                       ]
-        return [tmi.compute_tmi(regression) for regression in regressions]
+        regressions = tmi.regress_distance(pre_psd, post_psd, conn,
+                                           distmat, stim_channels, self.nperms)
 
+        return tmi.compute_tmi(regressions)
 
     @clear_cache_on_completion
     def run(self, get=None):

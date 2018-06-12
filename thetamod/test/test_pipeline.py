@@ -3,15 +3,14 @@ import pytest
 import os.path
 
 import numpy as np
-from numpy.testing import assert_equal, assert_almost_equal
-
-
+from numpy.testing import assert_almost_equal
 import thetamod.pipeline
 
 
 class TestTMIPipline(object):
 
-    def load_existing_results(self, subject, experiment, rhino_root):
+    @staticmethod
+    def load_existing_results(subject, experiment, rhino_root):
         data_fname = os.path.join(rhino_root, 'scratch', 'esolo', 'tmi_analysis',
                                   subject, 'tmi_output_{}.pk'.format(experiment)
                                   )
@@ -20,9 +19,7 @@ class TestTMIPipline(object):
         return {k.decode(): v for (k, v) in results.items()}
 
     @pytest.mark.parametrize(['subject', 'experiment', 'session'],
-                             [
-                                 ('R1260D', 'catFR3', 0),
-                             ]
+                             [('R1260D', 'catFR3', 0), ]
                              )
     @pytest.mark.rhino
     def test_pipeline_nodask(self, subject, experiment, session, rhino_root):
@@ -35,6 +32,15 @@ class TestTMIPipline(object):
                                                  rootdir=rhino_root)
         new_result = pipeline.run_nodask()[0]['zscore']
         assert_almost_equal(new_result, existing_tmi)
+
+    @pytest.mark.rhino
+    @pytest.mark.parametrize(['subject', 'experiment', 'session'],
+                             [('R1260D', 'catFR3', 0),
+                              ('R1111M', 'FR2', 1), ]
+                             )
+    def test_pipeline_rhino(self, subject, experiment, session, rhino_root):
+        thetamod.pipeline.TMIPipeline(subject, experiment, session,
+                                      rhino_root).run()
 
     @pytest.mark.parametrize(['subject', 'experiment', 'session'],
                              [
@@ -62,5 +68,8 @@ class TestTMIPipline(object):
         assert len(results) == 3
 
 if __name__ == '__main__':
-    TestTMIPipline().test_multiple_stim_sites(os.environ['RHINO_ROOT'])
+    rhino_root = os.environ['RHINO_ROOT']
+    TestTMIPipline().test_pipeline_rhino('R1260D', 'catFR3', 0, rhino_root)
+    TestTMIPipline().test_pipeline_nodask('R1260D', 'catFR3', 0, rhino_root)
+    TestTMIPipline().test_multiple_stim_sites(rhino_root)
 

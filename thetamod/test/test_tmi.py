@@ -7,7 +7,6 @@ import numpy as np
 from numpy.testing import assert_equal, assert_almost_equal
 
 from cmlreaders import CMLReader
-from cmlreaders.readers.eeg import NumpyEEGReader
 from cmlreaders.timeseries import TimeSeries
 
 from thetamod import tmi
@@ -37,7 +36,7 @@ def test_get_stim_channels(rhino_root):
     events = tmi.get_stim_events(reader)
     channels = tmi.get_stim_channels(pairs, events)
     assert len(channels) == 1
-    assert channels == [(98, 99)]
+    assert channels == [140]
 
 
 @pytest.mark.rhino
@@ -130,4 +129,4 @@ def test_compute_tmi():
 
 
 if __name__ == '__main__':
-    test_compute_tmi()
+    test_get_stim_channels('/Volumes/rhino_root')
