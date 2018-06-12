@@ -1,6 +1,7 @@
 from functools import partial
 from pkg_resources import resource_filename
 import pytest
+import pickle
 
 import numpy as np
 from numpy.testing import assert_equal, assert_almost_equal
@@ -32,8 +33,9 @@ def test_get_stim_events(rhino_root):
 @pytest.mark.rhino
 def test_get_stim_channels(rhino_root):
     reader = CMLReader("R1111M", "FR2", 0, rootdir=rhino_root)
+    pairs = reader.load("pairs")
     events = tmi.get_stim_events(reader)
-    channels = tmi.get_stim_channels(events)
+    channels = tmi.get_stim_channels(pairs, events)
     assert len(channels) == 1
     assert channels == [(98, 99)]
 
@@ -101,3 +103,31 @@ def test_get_distances():
     pytest.set_trace()
 
     assert_almost_equal(distmat, ref_result)
+
+
+@pytest.mark.skip("TMI values are not stable")
+def test_compute_tmi():
+    pkg = 'thetamod.test.data'
+    results_fname = resource_filename(pkg,'tmi_output_R1260D_catFR3.pk')
+    with open(results_fname,'rb') as result_file:
+        results = pickle.load(result_file, encoding='bytes')
+
+    session_mask  = results[b'sessions'] == 0
+    conn = results[b'conn']
+    conn += np.finfo(conn.dtype).eps
+
+    regressions = tmi.regress_distance(results[b'pre_pows'][session_mask],
+                                       results[b'post_pows'][session_mask],
+                                       conn,
+                                       results[b'distmat'],
+                                       results[b'stim_elec_idx'][0]
+                                       )
+
+    new_tmi = tmi.compute_tmi(regressions)['zscore']
+
+    old_tmi = results[b'tmi_Z'][0]
+    assert_almost_equal(new_tmi, old_tmi,decimal=2)
+
+
+if __name__ == '__main__':
+    test_compute_tmi()

@@ -176,7 +176,8 @@ def get_distances(pairs):
     return distmat
 
 
-def regress_distance(pre_psd, post_psd, conn, distmat, stim_channels):
+def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idx,
+                     nperms=1000):
     """Do regression on channel distances.
 
     Parameters
@@ -189,8 +190,8 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channels):
         Connectivity matrix.
     distmat : np.ndarray
         Distance adjacency matrix as computed from :func:`get_distance`.
-    stim_channels : List[int]
-        Stim channels as a list of channel indices.
+    stim_channel_idx : int
+        Index of the stim channel being analyzed
 
     Returns
     -------
@@ -209,22 +210,25 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channels):
     matrix, and :math:`\vec{x}_2` is the intercept.
 
     """
+
     t, p = ttest_rel(post_psd, pre_psd, axis=0)
     t[t == 0] = np.nan  # FIXME: why?
 
-    # FIXME: I think this needs to be done per stim channel? otherwise shapes are wrong
-    logit_conn = logit(conn[stim_channels])
+    logit_conn = logit(conn[stim_channel_idx])
 
-    size = np.sum(~np.isnan(t))
+    size = np.sum(np.isfinite(t))
     X = np.empty((size, 3))
     y = t
 
-    X[:, 0] = distmat[stim_channels][~np.isnan(t)]
-    X[:, 1] = logit_conn[~np.isnan(t)]
+    X[:, 0] = distmat[stim_channel_idx][np.isfinite(t)]
+    X[:, 1] = logit_conn[np.isfinite(t)]
     X[:, 2] = np.ones(size)  # intercept
 
-    print(conn[stim_channels])
-    print(X)
+    # print(conn[stim_channel_idx])
+    # print(X)
+    assert np.isfinite(X).all()
+
+    rval, _ = pearsonr(t, logit_conn)
 
     result = sm.OLS(y, X).fit()
     coefs = copy.copy(result.params)
@@ -238,12 +242,13 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channels):
     # Get null coefficients by shuffling 1000 times
     null_coefs = [
         sm.OLS(y, X[idx, :]).fit().params
-        for idx in shuffle_index(1000, X.shape[0])
+        for idx in shuffle_index(nperms, X.shape[0])
     ]
 
     results = {
-        "coefs": coefs,
-        "null_coefs": null_coefs,
+        "coefs": np.array(coefs),
+        "null_coefs": np.array(null_coefs),
+        "rvalue": rval
     }
 
     return results
@@ -265,22 +270,13 @@ def compute_tmi(regression_results):
     """
     coefs = regression_results["coefs"]
     null_coefs = regression_results["null_coefs"]
+    rvalue = regression_results["rvalue"]
 
-    zscores = []
-    pvalues = []
-
-    for i, coef in enumerate(coefs):
-        zscores.append(
-            (coef - np.nanmean(null_coefs[:, i])) / np.nanstd(null_coefs)
-        )
-        pvalues.append(np.sum(null_coefs[:, i] > coef) / len(null_coefs))
-
-    # TODO: r values
+    zscores = (coefs - np.nanmean(null_coefs,0)) / np.nanstd(null_coefs,0)
 
     tmi = {
-        "zscore": zscores,
-        "pvalue": pvalues,
-        "rvalue": [],
+        "zscore": zscores[1],
+        "rvalue": rvalue,
     }
 
     return tmi
