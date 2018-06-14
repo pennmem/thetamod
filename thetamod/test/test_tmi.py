@@ -49,7 +49,7 @@ def test_get_eeg(which, subject, experiment, session, shape, rhino_root):
     all_events = reader.load("events")
     events = all_events[all_events.type == "STIM_ON"]
 
-    eeg = tmi.get_eeg(which, reader, events, reref=False)
+    eeg = tmi.get_eeg(which, reader, events)
     assert eeg.shape == shape
 
 

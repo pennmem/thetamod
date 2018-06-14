@@ -6,6 +6,7 @@ import pandas as pd
 from scipy.special import logit
 from scipy.stats import ttest_rel, pearsonr
 import statsmodels.formula.api as sm
+import cmlreaders.exc
 
 
 def get_stim_events(reader):
@@ -41,9 +42,14 @@ def get_stim_channels(pairs, stim_events):
         List of channel indices for each stim channel.
 
     """
-    stim_params = pd.DataFrame([
-        row for row in stim_events[stim_events.type == "STIM_ON"].stim_params
-    ])
+    if ('anode_label' not in stim_events.columns) and (
+            'cathode_label' not in stim_events.columns):
+        stim_params = pd.DataFrame([
+            row for row in stim_events[stim_events.type == "STIM_ON"].stim_params
+        ])
+
+    else:
+        stim_params = stim_events[stim_events.type == "STIM_ON"]
 
     labels = np.unique([
         "{}-{}".format(row.anode_label, row.cathode_label)
@@ -56,7 +62,7 @@ def get_stim_channels(pairs, stim_events):
 
 
 def get_eeg(which, reader, stim_events, buffer=50, window=900,
-            stim_duration=500, reref=True):
+            stim_duration=500):
     """Get EEG data for pre- or post-stim periods.
 
     Parameters
@@ -95,6 +101,9 @@ def get_eeg(which, reader, stim_events, buffer=50, window=900,
     else:
         rel_start = buffer + stim_duration
         rel_stop = buffer + stim_duration + window
+
+    # FIXME: More general solution?
+    reref = not reader.load("sources")["name"].endswith(".h5")
 
     if reref:
         scheme = reader.load("pairs")
@@ -138,6 +147,7 @@ def compute_psd(eegs, fmin=5., fmax=8.):
     ea = eegs.to_mne()
     pows, fdone = psd_multitaper(ea, fmin=fmin, fmax=fmax, tmin=0.0,
                                  verbose=False)
+    pows += np.finfo(pows.dtype).eps
     powers = np.mean(np.log10(pows), 2)
     return powers
 
@@ -219,7 +229,7 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
 
         size = np.sum(np.isfinite(t))
         X = np.empty((size, 3))
-        y = t
+        y = t[np.isfinite(t)]
 
         X[:, 0] = distmat[stim_channel_idx][np.isfinite(t)]
         X[:, 1] = logit_conn[np.isfinite(t)]

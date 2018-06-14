@@ -23,13 +23,11 @@ def clear_cache_on_completion(func):
 
 class TMIPipeline(object):
     def __init__(self, subject: str, experiment: str, session: int,
-                 rootdir: Optional[str] = None, reref: bool = True,
-                 nperms=1000):
+                 rootdir: Optional[str] = None, nperms=1000):
         self.subject = subject
         self.experiment = experiment
         self.session = session
         self.rootdir = rootdir
-        self.reref = reref
         self.nperms = nperms
 
         self._pipeline = self._build_pipeline()
@@ -42,11 +40,8 @@ class TMIPipeline(object):
         stim_events = make_task(tmi.get_stim_events, reader)
         stim_channels = make_task(tmi.get_stim_channels, pairs, stim_events)
 
-        reref = self.reref
-
         pre_eeg, post_eeg = [
-            make_task(tmi.get_eeg, which, reader, stim_events, reref=reref,
-                      cache=False)
+            make_task(tmi.get_eeg, which, reader, stim_events,cache=False)
             for which in ("pre", "post")
         ]
 
@@ -69,14 +64,14 @@ class TMIPipeline(object):
 
         stim_events = tmi.get_stim_events(reader)
         stim_channels = tmi.get_stim_channels(pairs, stim_events)
+        conn = self.get_resting_connectivity()
 
         pre_eeg, post_eeg = (
-            tmi.get_eeg(which, reader, stim_events, reref=self.reref,)
+            tmi.get_eeg(which, reader, stim_events)
             for which in ("pre", "post")
         )
         distmat = tmi.get_distances(pairs)
         pre_psd, post_psd = (tmi.compute_psd(eeg) for eeg in (pre_eeg, post_eeg))
-        conn = self.get_resting_connectivity()
 
         regressions = tmi.regress_distance(pre_psd, post_psd, conn,
                                            distmat, stim_channels, self.nperms)
@@ -95,9 +90,9 @@ class TMIPipeline(object):
         experiment, and session.
 
         """
-        subject = subject or self.subject
-        experiment = experiment or self.experiment
-        session = session or self.session
+        subject = subject if subject is not None else self.subject
+        experiment = experiment if experiment is not None else self.experiment
+        session = session if session is not None else self.session
 
         return CMLReader(subject, experiment, session, rootdir=self.rootdir)
 
@@ -112,9 +107,10 @@ class TMIPipeline(object):
         for session in sessions:
             reader = self.get_reader(experiment="FR1", session=session)
             rate = reader.load('sources')['sample_rate']
+            reref = not reader.load('sources')['name'].endswith('.h5')
             events = connectivity.get_countdown_events(reader)
             resting = connectivity.countdown_to_resting(events, rate)
-            eeg = connectivity.read_eeg_data(reader, resting, reref=True)
+            eeg = connectivity.read_eeg_data(reader, resting, reref=reref)
             eeg_data.append(eeg)
 
         eegs = TimeSeries.concatenate(eeg_data)

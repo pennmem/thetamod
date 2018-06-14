@@ -20,10 +20,10 @@ if __name__ == "__main__":
         from cml_pipelines import memory
         memory.clear(warn=False)
 
-    subject = "R1286J"
+    subject = "R1260D"
     experiment = "catFR3"
     session = 0
-    rootdir = "~/mnt/rhino"
+    rootdir = "/Volumes/rhino_root"
 
     pipeline = TMIPipeline(subject, experiment, session, rootdir)
     result = pipeline.run(get=dask.get)

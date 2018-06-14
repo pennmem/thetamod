@@ -4,7 +4,7 @@ import mne
 import numpy as np
 import pandas as pd
 
-from cmlreaders import CMLReader
+import cmlreaders
 from cmlreaders.readers.eeg import milliseconds_to_events, \
     samples_to_milliseconds
 
@@ -77,9 +77,14 @@ def countdown_to_resting(events, samplerate=1000):
     to_millis = functools.partial(samples_to_milliseconds,
                                   sample_rate=samplerate)
     msoffsets = []
-    for offset in events.eegoffset:
-        msoffsets += [to_millis(offset) + s * 1000 for s in (1, 4, 7)]
-    return milliseconds_to_events(msoffsets, samplerate)
+    eegfiles=  []
+    for _, event in events.iterrows():
+        msoffsets += [to_millis(event.eegoffset) + s * 1000 for s in (1, 4, 7)]
+        eegfiles += [event.eegfile] * 3
+    new_offsets = milliseconds_to_events(msoffsets, samplerate)
+    new_events = pd.DataFrame({'eegfile': eegfiles,
+                              'eegoffset': new_offsets.values.squeeze()})
+    return new_events
 
 
 def read_eeg_data(reader, events, reref=True):
