@@ -41,7 +41,7 @@ def test_channel_exclusion_mask():
     full_eeg = get_eeg()
     ethan_p, ethan_lev_p = ethan.pred_stim_pipeline.channel_exclusion(full_eeg)
     pre_eeg, post_eeg = (get_eeg(which,...) for which in ('pre', 'post'))
-    new_p, new_levp = thetamod.artifact.get_channel_exclusion_mask(
+    new_p, new_levp = thetamod.artifact.get_channel_exclusion_pvals(
         pre_eeg,post_eeg
     )
     assert (new_p == ethan_p).all()

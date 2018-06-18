@@ -8,7 +8,7 @@ from cml_pipelines import make_task, memory
 from cmlreaders import CMLReader, get_data_index
 from cmlreaders.timeseries import TimeSeries
 
-from . import connectivity, tmi
+from . import connectivity, tmi, artifact
 
 
 def clear_cache_on_completion(func):
@@ -44,6 +44,11 @@ class TMIPipeline(object):
             make_task(tmi.get_eeg, which, reader, stim_events,cache=False)
             for which in ("pre", "post")
         ]
+
+        pre_eeg, post_eeg = make_task(
+            artifact.invalidate_eeg(reader, pre_eeg.channels, pre_eeg.data,
+                                    post_eeg.data, self.rootdir)
+        )
 
         distmat = make_task(tmi.get_distances, pairs)
 

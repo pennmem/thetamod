@@ -14,6 +14,9 @@ pre- and post-stim, as measured using a paired t-test
 
 """
 
+__all__ = ['get_saturated_events_mask', 'get_bad_channel_names',
+           'get_channel_exclusion_pvals', 'invalidate_eeg']
+
 
 def get_bad_channel_names(subject, montage, just_bad=None,rhino_root='/'):
 
@@ -53,7 +56,7 @@ def get_saturated_events_mask(eegs):
     return sat_events.astype(bool)
 
 
-def get_channel_exclusion_mask(pre_eeg, post_eeg):
+def get_channel_exclusion_pvals(pre_eeg, post_eeg):
     """
     Estimate which channels show broadband DC shift post-stimulation
     using T-test and Levene variance test.
@@ -92,3 +95,19 @@ def get_channel_exclusion_mask(pre_eeg, post_eeg):
             lev_pvals.append(0.0)
 
     return np.array(pvals), np.array(lev_pvals)
+
+
+def invalidate_eeg(reader,channels,pre_eeg,post_eeg,rhino_root,thresh=1e-5):
+    saturation_mask = get_saturated_events_mask(post_eeg)
+    bad_channel_list = get_bad_channel_names(reader.subject, reader.montage,
+                                             rhino_root=rhino_root)
+    pvals, _ = get_channel_exclusion_pvals(pre_eeg, post_eeg)
+    excluded_dc_shift = pvals <= thresh
+    bad_channel_mask = np.in1d(channels, bad_channel_list) | saturation_mask
+
+    pre_eeg[:, bad_channel_mask, :] = np.nan
+    post_eeg[:, bad_channel_mask, :] = np.nan
+    pre_eeg[excluded_dc_shift, :] = np.nan
+    post_eeg[excluded_dc_shift, :] = np.nan
+
+    return pre_eeg, post_eeg
