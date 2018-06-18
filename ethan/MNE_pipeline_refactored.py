@@ -13,12 +13,13 @@ from ptsa.data.events import Events
 from ptsa.data.readers import JsonIndexReader
 
 import warnings
+import os
 warnings.filterwarnings("ignore")
 
 #Get pyFR subjects
 ev_files = glob('/data/events/pyFR/*_events.mat')
 pyFRsubs = [d.split('/')[-1].split('_ev')[0] for d in ev_files]
-reader = JsonIndexReader('/protocols/r1.json')
+# reader = JsonIndexReader('/protocols/r1.json')
 
 MTL_labels = ['left ca1', 'left ca2', 'left ca3', 'left dg', 'left sub', 'left prc', 'left ec', 'left phc',
  'right ca1', 'right ca2', 'right ca3', 'right dg', 'right sub', 'right prc', 'right ec', 'right phc']
@@ -1282,21 +1283,32 @@ class mne_pipeline():
 
 #Helper Functions
 
-def exclude_bad(s, montage, just_bad=None):
+def exclude_bad(s, montage, just_bad=None,rhino_root='/'):
     import numpy as np
     from glob import glob
     try:
         if montage!=0:
-            fn = '/scratch/pwanda/electrode_categories/electrode_categories_'+s+'_'+str(montage)+'.txt'
+            fn = os.path.join(rhino_root,
+                              'scratch/pwanda/electrode_categories/electrode_categories_'+s+'_'+str(montage)+'.txt'
+                              )
         else:
-            if len(glob('/data/eeg/'+s+'/docs/electrode_categories.txt'))>0:
-                fn = '/data/eeg/'+s+'/docs/electrode_categories.txt'
+            if len(glob(os.path.join(rhino_root,
+                                     'data/eeg/'+s+'/docs/electrode_categories.txt'))
+                   )>0:
+                fn = os.path.join(rhino_root,
+                                  'data/eeg/'+s+'/docs/electrode_categories.txt'
+                                  )
             else:
-                if len(glob('/scratch/pwanda/electrode_categories/electrode_categories_'+s+'.txt'))>0:
-                    fn = '/scratch/pwanda/electrode_categories/electrode_categories_'+s+'.txt'
+                if len(glob(os.path.join(rhino_root,
+                                         'scratch/pwanda/electrode_categories/electrode_categories_'+s+'.txt'
+                                         )))>0:
+                    fn = os.path.join(rhino_root,
+                                      'scratch/pwanda/electrode_categories/electrode_categories_'+s+'.txt'
+                                      )
                 else:
-                    fn = '/scratch/pwanda/electrode_categories/'+s+'_electrode_categories.txt'
-
+                    fn = os.path.join(rhino_root,
+                                      'scratch/pwanda/electrode_categories/'+s+'_electrode_categories.txt'
+                                      )
         with open(fn, 'r') as fh:
             lines = [mystr.replace('\n', '') for mystr in fh.readlines()]
     except:
