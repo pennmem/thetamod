@@ -56,7 +56,7 @@ def get_saturated_events_mask(eegs):
     return sat_events.astype(bool)
 
 
-def get_channel_exclusion_pvals(pre_eeg, post_eeg):
+def get_channel_exclusion_pvals(pre_eeg, post_eeg, samplerate):
     """
     Estimate which channels show broadband DC shift post-stimulation
     using T-test and Levene variance test.
@@ -81,6 +81,8 @@ def get_channel_exclusion_pvals(pre_eeg, post_eeg):
 
     def justfinites(arr):
         return arr[np.isfinite(arr)]
+    pre_eeg = pre_eeg[..., int(-0.35 * samplerate):].mean(-1)
+    post_eeg = post_eeg[..., :int(0.35 * samplerate)].mean(-1)
 
     pvals = []
     lev_pvals = []
@@ -90,9 +92,10 @@ def get_channel_exclusion_pvals(pre_eeg, post_eeg):
                                            pre_eeg[:, i, ...], nan_policy='omit')
         pvals.append(eeg_p_chan)
         try:
-            lev_t, lev_p = levene(justfinites(post_eeg), justfinites(pre_eeg))
+            lev_t, lev_p = levene(justfinites(post_eeg[:, i]),
+                                  justfinites(pre_eeg[:, i]))
             lev_pvals.append(lev_p)
-        except Exception:
+        except Exception as e:
             lev_pvals.append(0.0)
 
     return np.array(pvals), np.array(lev_pvals)

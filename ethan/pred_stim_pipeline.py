@@ -255,7 +255,7 @@ def find_sat_events(eegs):
 
     return sat_events.astype(bool)
 
-def channel_exclusion(eegs):
+def channel_exclusion(eegs, sr):
     #Return p-values indicating channels with significant artifact: t-test and levene variance test
 
     from scipy.stats import ttest_rel
@@ -265,7 +265,6 @@ def channel_exclusion(eegs):
     def justfinites(arr):
         return arr[np.isfinite(arr)]
 
-    sr = int(eegs.samplerate)
 
     pvals = []; lev_pvals = [];
     for i in range(eegs.shape[0]):

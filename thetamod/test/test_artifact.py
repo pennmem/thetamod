@@ -4,7 +4,7 @@ import ethan.pred_stim_pipeline
 import thetamod.artifact
 from cmlreaders import CMLReader
 from thetamod.tmi import get_stim_events, get_eeg
-
+import numpy as np
 
 @pytest.mark.parametrize("just_bad",[True, False])
 @pytest.mark.parametrize("subject, montage", [
@@ -36,16 +36,33 @@ def test_saturated_events(subject, experiment, rhino_root):
     assert new_artifact_mask.any()
     assert (ethan_artifact_mask == new_artifact_mask).all()
 
-@pytest.mark.skip
-def test_channel_exclusion_mask():
-    full_eeg = get_eeg()
-    ethan_p, ethan_lev_p = ethan.pred_stim_pipeline.channel_exclusion(full_eeg)
-    pre_eeg, post_eeg = (get_eeg(which,...) for which in ('pre', 'post'))
-    new_p, new_levp = thetamod.artifact.get_channel_exclusion_pvals(
-        pre_eeg,post_eeg
+
+@pytest.mark.rhino
+def test_channel_exclusion_mask(rhino_root):
+    reader = CMLReader(subject='R1286J', experiment='catFR3', session=0,
+                       rootdir=rhino_root)
+
+    stim_events = get_stim_events(reader)
+
+    pre_eeg, post_eeg = (
+        get_eeg(which, reader, stim_events)
+        for which in ("pre", "post")
     )
-    assert (new_p == ethan_p).all()
-    assert (new_levp == ethan_lev_p).all()
+
+    sr = pre_eeg.samplerate
+    arr = np.zeros(shape=(pre_eeg.shape[0], pre_eeg.shape[1], int(2.5 * sr)))
+    arr[..., 50:950] = pre_eeg.data
+    arr[..., -950:-50] = post_eeg.data
+    arr = arr.transpose(1, 0, -1)
+
+    ethan_p, ethan_lev_p = ethan.pred_stim_pipeline.channel_exclusion(arr, sr)
+    new_p, new_levp = thetamod.artifact.get_channel_exclusion_pvals(
+        pre_eeg.data, post_eeg.data, sr
+    )
+
+    assert new_p.shape == ethan_p.shape
+    np.testing.assert_almost_equal(new_p, ethan_p, 5)
+    np.testing.assert_almost_equal(new_levp, ethan_lev_p, 5)
 
 
 def test_invalidate_eeg(rhino_root):
@@ -64,4 +81,4 @@ def test_invalidate_eeg(rhino_root):
 
 
 if __name__ == "__main__":
-    test_invalidate_eeg('/Volumes/rhino_root')
+    test_channel_exclusion_mask('/Volumes/rhino_root')
