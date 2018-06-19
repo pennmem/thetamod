@@ -114,7 +114,7 @@ def get_eeg(which, reader, stim_events, buffer=50, window=900,
                           rel_start=rel_start,
                           rel_stop=rel_stop,
                           scheme=scheme)
-
+    eeg.data = np.array(eeg.data, dtype=np.float)
     return eeg
 
 

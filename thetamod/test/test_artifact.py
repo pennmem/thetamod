@@ -3,7 +3,7 @@ import ethan.MNE_pipeline_refactored
 import ethan.pred_stim_pipeline
 import thetamod.artifact
 from cmlreaders import CMLReader
-from thetamod.tmi import get_stim_events,get_eeg
+from thetamod.tmi import get_stim_events, get_eeg
 
 
 @pytest.mark.parametrize("just_bad",[True, False])
@@ -48,5 +48,20 @@ def test_channel_exclusion_mask():
     assert (new_levp == ethan_lev_p).all()
 
 
+def test_invalidate_eeg(rhino_root):
+    reader = CMLReader(subject='R1286J', experiment='catFR3', session=0,
+                       rootdir=rhino_root)
+    pairs = reader.load("pairs")
+
+    stim_events = get_stim_events(reader)
+
+    pre_eeg, post_eeg = (
+        get_eeg(which, reader, stim_events)
+        for which in ("pre", "post")
+    )
+
+    thetamod.artifact.invalidate_eeg(reader, pre_eeg, post_eeg, rhino_root)
+
+
 if __name__ == "__main__":
-    test_electrode_categories('R1111M', 0, False, '/Volumes/rhino_root')
+    test_invalidate_eeg('/Volumes/rhino_root')

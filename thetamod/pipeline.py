@@ -41,14 +41,13 @@ class TMIPipeline(object):
         stim_channels = make_task(tmi.get_stim_channels, pairs, stim_events)
 
         pre_eeg, post_eeg = [
-            make_task(tmi.get_eeg, which, reader, stim_events,cache=False)
+            make_task(tmi.get_eeg, which, reader, stim_events, cache=False)
             for which in ("pre", "post")
         ]
 
         pre_eeg, post_eeg = make_task(
-            artifact.invalidate_eeg(reader, pre_eeg.channels, pre_eeg.data,
-                                    post_eeg.data, self.rootdir)
-        )
+            artifact.invalidate_eeg, reader, pre_eeg, post_eeg,
+            rhino_root=self.rootdir, nout=2)
 
         distmat = make_task(tmi.get_distances, pairs)
 
@@ -57,7 +56,8 @@ class TMIPipeline(object):
 
         conn = make_task(self.get_resting_connectivity)
         regressions = make_task(tmi.regress_distance,
-                               pre_psd, post_psd, conn, distmat, stim_channels)
+                                pre_psd, post_psd,
+                                conn, distmat, stim_channels)
 
         results = make_task(tmi.compute_tmi, regressions)
 
