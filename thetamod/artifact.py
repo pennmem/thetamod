@@ -18,10 +18,13 @@ __all__ = ['get_saturated_events_mask', 'get_bad_channel_names',
            'get_channel_exclusion_pvals', 'invalidate_eeg']
 
 
-def get_bad_channel_names(subject, montage, just_bad=None,rhino_root='/'):
+def get_bad_channel_names(subject, montage, just_bad=None, rhino_root='/'):
 
     reader = CMLReader(subject, montage=montage,rootdir=rhino_root)
-    electrode_categories = reader.load('electrode_categories')
+    try:
+        electrode_categories = reader.load('electrode_categories')
+    except FileNotFoundError:
+        return []
     if just_bad is True:
         return (electrode_categories.get('bad_electrodes',[])
                 + electrode_categories.get('broken_leads',[])
@@ -67,6 +70,8 @@ def get_channel_exclusion_pvals(pre_eeg, post_eeg, samplerate):
        Pre-stimulus EEG signals
     post_eeg
        Post-stimulus EEG signals
+    samplerate
+        EEG sampling rate
 
     Returns
     -------
@@ -86,7 +91,7 @@ def get_channel_exclusion_pvals(pre_eeg, post_eeg, samplerate):
 
     pvals = []
     lev_pvals = []
-    assert pre_eeg.shape == post_eeg.shape #FIXME: RAISE A PROPER EXCEPTION
+    assert pre_eeg.shape == post_eeg.shape  # FIXME: RAISE A PROPER EXCEPTION
     for i in range(pre_eeg.shape[1]):
         eeg_t_chan, eeg_p_chan = ttest_rel(post_eeg[:, i, ...],
                                            pre_eeg[:, i, ...], nan_policy='omit')
@@ -108,8 +113,10 @@ def invalidate_eeg(reader, pre_eeg, post_eeg, rhino_root, thresh=1e-5):
     saturation_mask = get_saturated_events_mask(post_eeg.data)
     bad_channel_list = get_bad_channel_names(reader.subject, reader.montage,
                                              rhino_root=rhino_root)
-    pvals, _ = get_channel_exclusion_pvals(pre_eeg.data.mean(-1),
-                                           post_eeg.data.mean(-1))
+    pvals, _ = get_channel_exclusion_pvals(pre_eeg.data,
+                                           post_eeg.data,
+                                           pre_eeg.samplerate
+                                           )
     excluded_dc_shift = pvals <= thresh
     bad_channel_mask = np.in1d(label0,bad_channel_list) | np.in1d(label1, bad_channel_list)
     bad_channel_mask |= excluded_dc_shift

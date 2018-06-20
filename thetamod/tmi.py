@@ -6,7 +6,7 @@ import pandas as pd
 from scipy.special import logit
 from scipy.stats import ttest_rel, pearsonr
 import statsmodels.formula.api as sm
-import cmlreaders.exc
+import cmlreaders
 
 
 def get_stim_events(reader):
@@ -22,7 +22,9 @@ def get_stim_events(reader):
 
     """
     events = reader.load("events")
-    stim_events = events[events.type == "STIM_ON"]
+    stim_events = events[(events.type == "STIM_ON") & (events.eegfile != "")]
+    if len(stim_events) == 0:
+        raise ValueError("No stim events found")
     return stim_events
 
 
@@ -59,6 +61,40 @@ def get_stim_channels(pairs, stim_events):
     indices = [pairs[pairs.label == label].index[0] for label in labels]
 
     return indices
+
+
+def get_eeg_ptsa(which,reader,stim_events,buffer=50,window=900,
+                 stim_duration=500):
+    from ptsa.data import readers, filters
+    if which not in ("pre", "post"):
+        raise ValueError("Specify 'pre' or 'post'")
+
+    if which == "pre":
+        rel_start = -(buffer + window)
+        rel_stop = -buffer
+    else:
+        rel_start = buffer + stim_duration
+        rel_stop = buffer + stim_duration + window
+
+    idx = cmlreaders.get_data_index(rootdir=reader.rootdir)
+    pair_file = idx.loc[(idx.subject == reader.subject)
+                        & (idx.experiment == reader.experiment)
+                        & (idx.session == reader.session)].pairs.unique()[0]
+
+    talreader = readers.TalReader(filename=pair_file)
+    channels = talreader.get_monopolar_channels()
+
+    eeg = readers.EEGReader(events=stim_events, channels=channels,
+                            start_time=rel_start, end_time=rel_stop).read()
+
+    if 'bipolar_pairs' not in eeg.dims:
+        eeg = filters.MonopolarToBipolarMapper(
+            time_series=eeg, bipolar_pairs=talreader.get_bipolar_pairs()
+        ).filter()
+    eeg = filters.ButterworthFilter(time_series=eeg, freqs=[58., 62.],
+                                    filt_type='stop').filter()
+
+    return eeg
 
 
 def get_eeg(which, reader, stim_events, buffer=50, window=900,
@@ -220,19 +256,22 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
 
     """
 
-    t, p = ttest_rel(post_psd, pre_psd, axis=0)
-    t[t == 0] = np.nan  # FIXME: why?
+    t, p = ttest_rel(post_psd, pre_psd, axis=0, nan_policy='omit')
+
+    tmask = ~np.ma.getmaskarray(t)
+
+
 
     results = []
     for stim_channel_idx in stim_channel_idxs:
         logit_conn = logit(conn[stim_channel_idx])
 
-        size = np.sum(np.isfinite(t))
+        size = np.sum(tmask)
         X = np.empty((size, 3))
-        y = t[np.isfinite(t)]
+        y = t[tmask]
 
-        X[:, 0] = distmat[stim_channel_idx][np.isfinite(t)]
-        X[:, 1] = logit_conn[np.isfinite(t)]
+        X[:, 0] = distmat[stim_channel_idx][tmask]
+        X[:, 1] = logit_conn[tmask]
         X[:, 2] = np.ones(size)  # intercept
 
         # print(conn[stim_channel_idx])

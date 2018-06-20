@@ -95,18 +95,27 @@ class TMIPipeline(object):
         experiment, and session.
 
         """
+        idx = get_data_index('r1', self.rootdir)
+
         subject = subject if subject is not None else self.subject
         experiment = experiment if experiment is not None else self.experiment
-        session = session if session is not None else self.session
+        session = int(session if session is not None else self.session)
 
-        return CMLReader(subject, experiment, session, rootdir=self.rootdir)
+        montage = idx.loc[(idx.subject == subject)
+                          & (idx.experiment == experiment)
+                          & (idx.session == session)].montage.unique()[0]
+
+        return CMLReader(subject, experiment, session,
+                         montage=montage, rootdir=self.rootdir)
 
     def get_resting_connectivity(self) -> np.ndarray:
         """Compute resting state connectivity."""
         df = get_data_index(rootdir=self.rootdir)
         sessions = df[(df.subject == self.subject) &
-                      (df.experiment == "FR1")].session
+                      (df.experiment == "FR1")].session.unique()
 
+        if len(sessions) == 0:
+            raise RuntimeError("No FR1 sessions exist for %s"%self.subject)
         # Read EEG data for "resting" events
         eeg_data = []
         for session in sessions:

@@ -6,6 +6,7 @@ from cmlreaders import CMLReader
 from thetamod.tmi import get_stim_events, get_eeg
 import numpy as np
 
+@pytest.mark.rhino
 @pytest.mark.parametrize("just_bad",[True, False])
 @pytest.mark.parametrize("subject, montage", [
     ('R1111M', 0),
@@ -23,6 +24,7 @@ def test_electrode_categories(subject, montage, just_bad, rhino_root):
     assert set(ethan_electrode_list) == set(new_electrode_list)
 
 
+@pytest.mark.rhino
 @pytest.mark.parametrize("subject, experiment", [
     ('R1286J', 'catFR3',),
     ('R1332M', 'PS4_catFR'),
@@ -65,6 +67,7 @@ def test_channel_exclusion_mask(rhino_root):
     np.testing.assert_almost_equal(new_levp, ethan_lev_p, 5)
 
 
+@pytest.mark.rhino
 def test_invalidate_eeg(rhino_root):
     reader = CMLReader(subject='R1286J', experiment='catFR3', session=0,
                        rootdir=rhino_root)
