@@ -3,6 +3,7 @@ from typing import Optional
 
 from dask.delayed import Delayed
 import numpy as np
+import dask
 
 from cml_pipelines import make_task, memory
 from cmlreaders import CMLReader, get_data_index
@@ -45,9 +46,14 @@ class TMIPipeline(object):
             for which in ("pre", "post")
         ]
 
-        pre_eeg, post_eeg = make_task(
-            artifact.invalidate_eeg, reader, pre_eeg, post_eeg,
-            rhino_root=self.rootdir, nout=2)
+        bad_events_mask = make_task(
+            artifact.get_bad_events_mask, post_eeg.data, stim_events
+        )
+
+        channel_exclusion_mask = make_task(
+            artifact.get_channel_exclusion_mask,
+            pre_eeg.data, post_eeg.data, pre_eeg.samplerate
+        )
 
         distmat = make_task(tmi.get_distances, pairs)
 
@@ -55,9 +61,12 @@ class TMIPipeline(object):
         post_psd = make_task(tmi.compute_psd, post_eeg)
 
         conn = make_task(self.get_resting_connectivity)
+
         regressions = make_task(tmi.regress_distance,
                                 pre_psd, post_psd,
-                                conn, distmat, stim_channels)
+                                conn, distmat, stim_channels,
+                                event_mask=bad_events_mask,
+                                artifact_channels=channel_exclusion_mask)
 
         results = make_task(tmi.compute_tmi, regressions)
 
@@ -84,7 +93,7 @@ class TMIPipeline(object):
         return tmi.compute_tmi(regressions)
 
     @clear_cache_on_completion
-    def run(self, get=None):
+    def run(self, get=dask.get):
         """Run the pipeline and return the results."""
         return self._pipeline.compute(get=get)
 
