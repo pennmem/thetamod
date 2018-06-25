@@ -1,5 +1,7 @@
 import numpy as np
-from cmlreaders import CMLReader
+from cmlreaders.path_finder import PathFinder
+import os
+from glob import glob
 from scipy.stats import ttest_rel
 from scipy.stats import levene
 import itertools
@@ -15,22 +17,43 @@ pre- and post-stim, as measured using a paired t-test
 """
 
 __all__ = ['get_saturated_events_mask', 'get_bad_channel_names',
+           'get_bad_events_mask',
            'get_channel_exclusion_pvals', 'invalidate_eeg']
 
 
 def get_bad_channel_names(subject, montage, just_bad=None, rhino_root='/'):
+    finder = PathFinder(rootdir=rhino_root,subject=subject, montage=montage)
+    fn = finder.find('electrode_categories')
+    with open(fn, 'r') as fh:
+        lines = [mystr.replace('\n', '') for mystr in fh.readlines()]
 
-    reader = CMLReader(subject, montage=montage,rootdir=rhino_root)
-    try:
-        electrode_categories = reader.load('electrode_categories')
-    except FileNotFoundError:
-        return []
     if just_bad is True:
-        return (electrode_categories.get('bad_electrodes',[])
-                + electrode_categories.get('broken_leads',[])
-                )
-    else:
-        return list(itertools.chain(*electrode_categories.values()))
+        bidx = len(lines)
+        try:
+            bidx = [s.lower().replace(':', '').strip() for s in lines].index('bad electrodes')
+        except:
+            try:
+                bidx = [s.lower().replace(':', '').strip() for s in lines].index('broken leads')
+            except:
+                lines = []
+        lines = lines[bidx:]
+    return lines
+
+
+def get_bad_events_mask(eegs, events):
+    saturation_mask = get_saturated_events_mask(eegs)
+    adjacent_events_mask = get_adjacent_events_mask(events)
+
+    return saturation_mask & adjacent_events_mask[:, None]
+
+def get_adjacent_events_mask(events):
+    msdiff = np.diff(events.mstime)
+    msdiff = np.append(msdiff, np.nan)
+    for idx, i in enumerate(msdiff):
+        if i < 1500:
+            msdiff[idx] = np.nan
+            msdiff[idx+1] = np.nan
+    return np.isnan(msdiff)
 
 
 def get_saturated_events_mask(eegs):
@@ -57,6 +80,11 @@ def get_saturated_events_mask(eegs):
                 continue
 
     return sat_events.astype(bool)
+
+
+def get_channel_exclusion_mask(pre_eeg, post_eeg, samplerate, threshold=1e-3):
+    pvals, _ = get_channel_exclusion_pvals(pre_eeg, post_eeg, samplerate)
+    return pvals < threshold
 
 
 def get_channel_exclusion_pvals(pre_eeg, post_eeg, samplerate):
