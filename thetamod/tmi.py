@@ -7,7 +7,7 @@ from scipy.special import logit
 from scipy.stats import ttest_rel, pearsonr
 import statsmodels.formula.api as sm
 import cmlreaders
-
+from . import artifact
 
 def get_stim_events(reader):
     """Get all stim events.
@@ -139,7 +139,7 @@ def get_eeg(which, reader, stim_events, buffer=50, window=900,
         rel_stop = buffer + stim_duration + window
 
     # FIXME: More general solution?
-    reref = not reader.load("sources")["name"].endswith(".h5")
+    reref = not reader.load("sources").get("name","").endswith(".h5")
 
     if reref:
         scheme = reader.load("pairs")
@@ -221,7 +221,7 @@ def get_distances(pairs):
 
 
 def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
-                     nperms=1000):
+                     nperms=1000, event_mask=None, artifact_channels=None):
     """Do regression on channel distances.
 
     Parameters
@@ -236,6 +236,10 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
         Distance adjacency matrix as computed from :func:`get_distance`.
     stim_channel_idx : int
         Index of the stim channel being analyzed
+    nperms: int
+        number of permutations to use
+    event_mask: Optional[np.ndarray]
+        Mask of bad trials to exclude
 
     Returns
     -------
@@ -255,12 +259,21 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
     matrix, and :math:`\vec{x}_2` is the intercept.
 
     """
+    if event_mask is not None:
+        pre_psd[event_mask] = np.nan
+        post_psd[event_mask] = np.nan
 
     t, p = ttest_rel(post_psd, pre_psd, axis=0, nan_policy='omit')
 
-    tmask = ~np.ma.getmaskarray(t)
+    if artifact_channels is not None:
+        t[artifact_channels] = np.nan
 
+    t[np.sum(event_mask,0)>20] = np.nan
 
+    tmask = np.isfinite(t)
+
+    if tmask.sum()<10:
+        raise ValueError("Too few electrodes to compute TMI")
 
     results = []
     for stim_channel_idx in stim_channel_idxs:
@@ -277,6 +290,7 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
         # print(conn[stim_channel_idx])
         # print(X)
         assert np.isfinite(X).all()
+        assert np.isfinite(y).all()
 
         rval, _ = pearsonr(t, logit_conn)
 
