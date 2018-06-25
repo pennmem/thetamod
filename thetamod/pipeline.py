@@ -36,61 +36,41 @@ class TMIPipeline(object):
     def _build_pipeline(self) -> Delayed:
         """Build the pipeline."""
         reader = self.get_reader()
-        pairs = reader.load("pairs")
+        self.pairs = reader.load("pairs").sort_values(by=["contact_1",
+                                                          "contact_2"])
 
-        stim_events = make_task(tmi.get_stim_events, reader)
-        stim_channels = make_task(tmi.get_stim_channels, pairs, stim_events)
+        self.stim_events = make_task(tmi.get_stim_events, reader)
+        self.stim_channels = make_task(tmi.get_stim_channels,
+                                       self.pairs, self.stim_events)
 
         pre_eeg, post_eeg = [
-            make_task(tmi.get_eeg, which, reader, stim_events, cache=False)
+            make_task(tmi.get_eeg, which, reader, self.stim_events, cache=False)
             for which in ("pre", "post")
         ]
 
-        bad_events_mask = make_task(
-            artifact.get_bad_events_mask, post_eeg.data, stim_events
-        )
+        self.bad_events_mask = make_task(artifact.get_bad_events_mask, post_eeg.data,
+                                         self.stim_events)
 
-        channel_exclusion_mask = make_task(
-            artifact.get_channel_exclusion_mask,
-            pre_eeg.data, post_eeg.data, pre_eeg.samplerate
-        )
+        self.pre_psd = make_task(tmi.compute_psd, pre_eeg)
+        self.post_psd = make_task(tmi.compute_psd, post_eeg)
+        self.distmat = make_task(tmi.get_distances, self.pairs)
+        self.conn = make_task(self.get_resting_connectivity)
 
-        distmat = make_task(tmi.get_distances, pairs)
+        self.channel_exclusion_mask = make_task(
+            artifact.get_channel_exclusion_mask, pre_eeg.data,
+            post_eeg.data, pre_eeg.samplerate)
 
-        pre_psd = make_task(tmi.compute_psd, pre_eeg)
-        post_psd = make_task(tmi.compute_psd, post_eeg)
-
-        conn = make_task(self.get_resting_connectivity)
-
-        regressions = make_task(tmi.regress_distance,
-                                pre_psd, post_psd,
-                                conn, distmat, stim_channels,
-                                event_mask=bad_events_mask,
-                                artifact_channels=channel_exclusion_mask)
+        regressions, self.tstats = make_task(
+            tmi.regress_distance,
+            self.pre_psd, self.post_psd,
+            self.conn, self.distmat, self.stim_channels,
+            event_mask=self.bad_events_mask,
+            artifact_channels=self.channel_exclusion_mask,
+            nout=2)
 
         results = make_task(tmi.compute_tmi, regressions)
 
         return results
-
-    def run_nodask(self):
-        reader = self.get_reader()
-        pairs = reader.load("pairs")
-
-        stim_events = tmi.get_stim_events(reader)
-        stim_channels = tmi.get_stim_channels(pairs, stim_events)
-        conn = self.get_resting_connectivity()
-
-        pre_eeg, post_eeg = (
-            tmi.get_eeg(which, reader, stim_events)
-            for which in ("pre", "post")
-        )
-        distmat = tmi.get_distances(pairs)
-        pre_psd, post_psd = (tmi.compute_psd(eeg) for eeg in (pre_eeg, post_eeg))
-
-        regressions = tmi.regress_distance(pre_psd, post_psd, conn,
-                                           distmat, stim_channels, self.nperms)
-
-        return tmi.compute_tmi(regressions)
 
     @clear_cache_on_completion
     def run(self, get=dask.get):

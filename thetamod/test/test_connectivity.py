@@ -84,5 +84,5 @@ def test_resting_state_connectivity(rhino_root):
              events=pd.concat(all_events, ignore_index=True).to_records(),
              resting=pd.concat(all_resting, ignore_index=True).to_records())
 
-    # assert_equal(conn, data)
     assert_almost_equal(conn, data, 3)
+

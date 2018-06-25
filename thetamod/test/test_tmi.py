@@ -4,7 +4,7 @@ import pytest
 import pickle
 
 import numpy as np
-from numpy.testing import assert_equal, assert_almost_equal
+from numpy.testing import assert_allclose, assert_almost_equal
 
 from cmlreaders import CMLReader
 from cmlreaders.timeseries import TimeSeries
@@ -81,52 +81,85 @@ def test_compute_psd(rhino_root):
              post_psd=post_psd,
              ethan_pre_psd=ethan["pre"],
              ethan_post_psd=ethan["post"])
+    is_not_nan_pre = ~np.isnan(ethan["pre"])
+    is_not_nan_post = ~np.isnan(ethan["post"])
+    assert_allclose(ethan["pre"][is_not_nan_pre], pre_psd[is_not_nan_pre],
+                    )
+    assert_allclose(ethan["post"][is_not_nan_post], post_psd[is_not_nan_post])
 
-    # Not checking for now since they don't match exactly...
-    # assert_equal(ethan["pre"], pre_psd)
-    # assert_equal(ethan["post"], post_psd)
 
-
-@pytest.mark.skip("a few values don't match for some reason")
 def test_get_distances():
     pkg = "thetamod.test.data"
 
     filename = resource_filename(pkg, "R1260D_pairs.json")
     reader = CMLReader("R1260D")
-    pairs = reader.load("pairs", file_path=filename)
+    pairs = reader.load("pairs", file_path=filename).sort_values(
+        by=['contact_1', 'contact_2'])
 
     filename = resource_filename(pkg, "R1260D_distmat.npy")
     ref_result = np.load(filename)
     distmat = tmi.get_distances(pairs)
 
-    pytest.set_trace()
-
     assert_almost_equal(distmat, ref_result)
 
 
-@pytest.mark.skip("TMI values are not stable")
+def test_compute_tstat():
+    pkg = 'thetamod.test.data'
+    results_fname = resource_filename(pkg,'tmi_output_R1260D_catFR3.pk')
+    with open(results_fname,'rb') as result_file:
+        results = pickle.load(result_file, encoding='bytes')
+
+    last_session = np.unique(results[b'sessions'])[-1]
+    session_mask = results[b'sessions'] == last_session
+
+    conn = results[b'conn']
+    conn += np.finfo(conn.dtype).eps
+
+    event_mask = np.isnan(results[b'pre_pows'][session_mask])
+    channel_mask = results[b'pvals'] < 0.0001
+
+    regressions, tstats = tmi.regress_distance(
+        results[b'pre_pows'][session_mask],
+        results[b'post_pows'][session_mask],
+        conn,
+        results[b'distmat'],
+        results[b'stim_elec_idx'][:1],
+        event_mask=event_mask,
+        artifact_channels=channel_mask)
+
+    old_tstat = results[b'T']
+    assert_almost_equal(tstats, old_tstat)
+
+
 def test_compute_tmi():
     pkg = 'thetamod.test.data'
     results_fname = resource_filename(pkg,'tmi_output_R1260D_catFR3.pk')
     with open(results_fname,'rb') as result_file:
         results = pickle.load(result_file, encoding='bytes')
 
-    session_mask  = results[b'sessions'] == 0
-    conn = results[b'conn']
+    last_session = np.unique(results[b'sessions'])[-1]
+    session_mask = results[b'sessions'] == last_session
+
+    conn = np.load(resource_filename(
+        pkg,'R1260D_baseline3trials_network_theta-alpha.npy'))
+
     conn += np.finfo(conn.dtype).eps
 
-    regressions = tmi.regress_distance(results[b'pre_pows'][session_mask],
-                                       results[b'post_pows'][session_mask],
-                                       conn,
-                                       results[b'distmat'],
-                                       results[b'stim_elec_idx'][0]
-                                       )
+    event_mask = np.isnan(results[b'pre_pows'][session_mask])
 
-    new_tmi = tmi.compute_tmi(regressions)['zscore']
+    regressions, tstats = tmi.regress_distance(
+        results[b'pre_pows'][session_mask],
+        results[b'post_pows'][session_mask],
+        conn,
+        results[b'distmat'],
+        results[b'stim_elec_idx'][:1],
+        event_mask=event_mask)
 
-    old_tmi = results[b'tmi_Z'][0]
-    assert_almost_equal(new_tmi, old_tmi,decimal=2)
+    new_tmi = tmi.compute_tmi(regressions)[0]['zscore']
+
+    old_tmi = results[b'tmi_Z'][-1]
+    assert_almost_equal(new_tmi, old_tmi, decimal=1)
 
 
-if __name__ == '__main__':
-    test_get_stim_channels('/Volumes/rhino_root')
+if __name__ == "__main__":
+    test_compute_tstat()

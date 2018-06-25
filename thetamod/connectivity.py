@@ -111,7 +111,7 @@ def read_eeg_data(reader, events, reref=True):
 
     """
     if reref:
-        scheme = reader.load('pairs')
+        scheme = reader.load('pairs').sort_values(by=['contact_1', 'contact_2'])
     else:
         scheme = None
 

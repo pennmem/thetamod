@@ -14,9 +14,6 @@ import numpy as np
 def test_electrode_categories(subject, montage, just_bad, rhino_root):
     ethan_electrode_list = ethan.MNE_pipeline_refactored.exclude_bad(
         subject, montage, just_bad, rhino_root)
-    ethan_electrode_list = [name for name in ethan_electrode_list if
-                            name.upper()==name and name.isalnum()
-                            and 'R1' not in name]
     new_electrode_list = thetamod.artifact.get_bad_channel_names(
         subject, montage, just_bad, rhino_root
     )

@@ -139,10 +139,10 @@ def get_eeg(which, reader, stim_events, buffer=50, window=900,
         rel_stop = buffer + stim_duration + window
 
     # FIXME: More general solution?
-    reref = not reader.load("sources").get("name","").endswith(".h5")
+    reref = not reader.load("sources").get("name", "").endswith(".h5")
 
     if reref:
-        scheme = reader.load("pairs")
+        scheme = reader.load("pairs").sort_values(by=["contact_1", "contact_2"])
     else:
         scheme = None
 
@@ -205,7 +205,7 @@ def get_distances(pairs):
     # positions matrix shaped as N_channels x 3
     pos = np.array([
         [row["ind.{}".format(c)] for c in ("x", "y", "z")]
-        for _, row in pairs.iterrows()
+        for _, row in pairs.sort_values(by=['contact_1', 'contact_2']).iterrows()
     ])
 
     distmat = np.empty((len(pos), len(pos)))
@@ -265,10 +265,13 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
 
     t, p = ttest_rel(post_psd, pre_psd, axis=0, nan_policy='omit')
 
+    t[t == 0] = np.nan
+
     if artifact_channels is not None:
         t[artifact_channels] = np.nan
 
-    t[np.sum(event_mask,0)>20] = np.nan
+    if event_mask is not None:
+        t[np.sum(event_mask, 0) > 20] = np.nan
 
     tmask = np.isfinite(t)
 
@@ -315,7 +318,7 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
             "rvalue": rval
         })
 
-    return results
+    return results, t
 
 
 def compute_tmi(regression_results_list):

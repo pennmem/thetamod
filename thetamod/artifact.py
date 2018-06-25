@@ -44,7 +44,8 @@ def get_bad_events_mask(eegs, events):
     saturation_mask = get_saturated_events_mask(eegs)
     adjacent_events_mask = get_adjacent_events_mask(events)
 
-    return saturation_mask & adjacent_events_mask[:, None]
+    return saturation_mask | adjacent_events_mask[:, None]
+
 
 def get_adjacent_events_mask(events):
     msdiff = np.diff(events.mstime)
@@ -82,7 +83,7 @@ def get_saturated_events_mask(eegs):
     return sat_events.astype(bool)
 
 
-def get_channel_exclusion_mask(pre_eeg, post_eeg, samplerate, threshold=1e-3):
+def get_channel_exclusion_mask(pre_eeg, post_eeg, samplerate, threshold=1e-4):
     pvals, _ = get_channel_exclusion_pvals(pre_eeg, post_eeg, samplerate)
     return pvals < threshold
 
