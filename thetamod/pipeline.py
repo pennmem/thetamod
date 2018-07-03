@@ -60,7 +60,7 @@ class TMIPipeline(object):
             artifact.get_channel_exclusion_mask, pre_eeg.data,
             post_eeg.data, pre_eeg.samplerate)
 
-        regressions, self.tstats = make_task(
+        self.regressions, self.tstats = make_task(
             tmi.regress_distance,
             self.pre_psd, self.post_psd,
             self.conn, self.distmat, self.stim_channels,
@@ -68,7 +68,7 @@ class TMIPipeline(object):
             artifact_channels=self.channel_exclusion_mask,
             nout=2)
 
-        results = make_task(tmi.compute_tmi, regressions)
+        results = make_task(tmi.compute_tmi, self.regressions)
 
         return results
 
