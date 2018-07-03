@@ -22,23 +22,45 @@ def test_electrode_categories(subject, montage, just_bad, rhino_root):
 
 
 @pytest.mark.rhino
-@pytest.mark.parametrize("subject, experiment", [
-    ('R1286J', 'catFR3',),
-    ('R1332M', 'PS4_catFR'),
+@pytest.mark.parametrize("subject, experiment, session", [
+        ('R1154D', 'FR3', 4),
+        # ('R1195E', 'FR3', 2),
+        # ('R1200T', 'FR3', 0),
+        ('R1204T', 'FR3', 0),
+        ('R1161E', 'FR3', 1),
+        # ('R1163T', 'FR3', 1),
+        # ('R1166D', 'FR3', 1),
+        # ('R1260D', 'catFR3', 2),
+        ('R1274T', 'catFR3', 0),
+
 ])
-def test_saturated_events(subject, experiment, rhino_root):
-    reader = CMLReader(subject, experiment, session=0, rootdir=rhino_root)
+@pytest.mark.parametrize("kind",["pre","post"])
+def test_saturated_events(subject, experiment, session, kind, rhino_root):
+    reader = CMLReader(subject, experiment, session=session, rootdir=rhino_root)
     events = get_stim_events(reader)
-    eeg = get_eeg('pre', reader, events).data
+    eeg = get_eeg(kind, reader, events).data
     ethan_artifact_mask = ethan.pred_stim_pipeline.find_sat_events(eeg)
+
     new_artifact_mask = thetamod.artifact.get_saturated_events_mask(eeg)
-    assert new_artifact_mask.any()
     assert (ethan_artifact_mask == new_artifact_mask).all()
 
 
+@pytest.mark.parametrize("subject, experiment, session",
+                         [
+                             ('R1154D', 'FR3', 4),
+                             # ('R1195E', 'FR3', 2),
+                             # ('R1200T', 'FR3', 0),
+                             ('R1204T', 'FR3', 0),
+                             ('R1161E', 'FR3', 1),
+                             # ('R1163T', 'FR3', 1),
+                             # ('R1166D', 'FR3', 1),
+                             # ('R1260D', 'catFR3', 2),
+                             ('R1274T', 'catFR3', 0),
+                         ]
+                         )
 @pytest.mark.rhino
-def test_channel_exclusion_mask(rhino_root):
-    reader = CMLReader(subject='R1286J', experiment='catFR3', session=0,
+def test_channel_exclusion_mask(rhino_root, subject,experiment,session):
+    reader = CMLReader(subject=subject, experiment=experiment, session=session,
                        rootdir=rhino_root)
 
     stim_events = get_stim_events(reader)

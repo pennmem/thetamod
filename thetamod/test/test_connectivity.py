@@ -10,7 +10,9 @@ from cmlreaders import CMLReader, get_data_index
 from cmlreaders.timeseries import TimeSeries
 
 from thetamod.connectivity import *
-
+import scipy.special
+from ptsa.data.filters import ButterworthFilter
+import pdb
 
 @pytest.fixture
 def subject():
@@ -43,7 +45,7 @@ def test_resting_state_connectivity(rhino_root):
 
     index = get_data_index("r1", rhino_root)
     sessions = index[(index.subject == subject) &
-                     (index.experiment == 'FR1')].session.values
+                     (index.experiment == 'FR1')].session.unique()
 
     all_events = []
     all_resting = []
@@ -68,6 +70,8 @@ def test_resting_state_connectivity(rhino_root):
                  sorted(pd.concat(all_resting).eegoffset.values))
 
     eegs = TimeSeries.concatenate(data)
+    eegs.data = ButterworthFilter(time_series=eegs.to_ptsa(),
+                                  ).filter().values
     conn = get_resting_state_connectivity(eegs.to_mne(), eegs.samplerate)
 
     basename = ('{subject}_baseline3trials_network_theta-alpha.npy'
@@ -84,5 +88,6 @@ def test_resting_state_connectivity(rhino_root):
              events=pd.concat(all_events, ignore_index=True).to_records(),
              resting=pd.concat(all_resting, ignore_index=True).to_records())
 
-    assert_almost_equal(conn, data, 3)
+    assert_almost_equal(scipy.special.logit(conn),
+                        scipy.special.logit(data), 3)
 
