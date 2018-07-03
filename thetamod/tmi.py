@@ -7,7 +7,6 @@ from scipy.special import logit
 from scipy.stats import ttest_rel, pearsonr
 import statsmodels.formula.api as sm
 import cmlreaders
-from . import artifact
 
 def get_stim_events(reader):
     """Get all stim events.
@@ -280,25 +279,8 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
 
     results = []
     for stim_channel_idx in stim_channel_idxs:
-        logit_conn = logit(conn[stim_channel_idx])
-
-        size = np.sum(tmask)
-        X = np.empty((size, 3))
-        y = t[tmask]
-
-        X[:, 0] = distmat[stim_channel_idx][tmask]
-        X[:, 1] = logit_conn[tmask]
-        X[:, 2] = np.ones(size)  # intercept
-
-        # print(conn[stim_channel_idx])
-        # print(X)
-        assert np.isfinite(X).all()
-        assert np.isfinite(y).all()
-
-        rval, _ = pearsonr(t, logit_conn)
-
-        result = sm.OLS(y, X).fit()
-        coefs = copy.copy(result.params)
+        X, coefs, rval, y = do_regression(conn, distmat, stim_channel_idx, t,
+                                          tmask)
 
         def shuffle_index(N, size):
             idx = np.arange(size)
@@ -319,6 +301,23 @@ def regress_distance(pre_psd, post_psd, conn, distmat, stim_channel_idxs,
         })
 
     return results, t
+
+
+def do_regression(conn, distmat, stim_channel_idx, t, tmask):
+    logit_conn = logit(conn[stim_channel_idx])
+    tmask[stim_channel_idx] = False
+    size = np.sum(tmask)
+    X = np.empty((size, 3))
+    y = t[tmask]
+    X[:, 0] = distmat[stim_channel_idx][tmask]
+    X[:, 1] = logit_conn[tmask]
+    X[:, 2] = np.ones(size)  # intercept
+    assert np.isfinite(X).all()
+    assert np.isfinite(y).all()
+    rval, _ = pearsonr(t[tmask], logit_conn[tmask])
+    result = sm.OLS(y, X).fit()
+    coefs = copy.copy(result.params)
+    return X, coefs, rval, y
 
 
 def compute_tmi(regression_results_list):
