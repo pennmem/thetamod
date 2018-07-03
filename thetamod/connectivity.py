@@ -156,5 +156,4 @@ def get_resting_state_connectivity(array, samplerate):
     # Symmetrize average network
     mu = cons_rec
     mu_full = np.nansum(np.array([mu, mu.T]), 0)
-    mu_full[np.diag_indices_from(mu_full)] = np.finfo(mu_full.dtype).eps
     return mu_full
